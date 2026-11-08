@@ -316,6 +316,14 @@ table.params { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); 
 @media (max-width: 640px) {
   .doc { padding: var(--s4); }
 }
+
+/* Swagger UI reference (/swagger). Swagger UI only has light colours, so it
+   sits on a light sheet in both schemes, like the diagram plate. */
+.doc-lead { margin: var(--s5) 0 var(--s3); max-width: 62ch; color: var(--muted); }
+.swagger-sheet { background: #fff; color: #3b4151; border: 1px solid var(--rule); border-radius: 4px; margin-bottom: var(--s5); padding: var(--s2) 0; overflow-x: auto; }
+.swagger-loading { padding: var(--s5); margin: 0; }
+.swagger-sheet .swagger-ui .info { margin: var(--s4) 0; }
+.swagger-sheet .swagger-ui .scheme-container { box-shadow: none; padding: var(--s3) 0; }
 .panel > .meta:first-child { margin: 0 0 var(--s5); }
 
 /* Touch screens: comfortable 44px targets for the small controls */

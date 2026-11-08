@@ -46,6 +46,7 @@ func (s *Server) Handler() http.Handler {
 	ver := assetVersion(s.Static, themeCSS)
 	index := versionedPage(s.Static, "index.html", ver)
 	help := versionedPage(s.Static, "help.html", ver)
+	swagger := versionedPage(s.Static, "swagger.html", ver)
 	mux.HandleFunc("GET /theme.css", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/css; charset=utf-8")
 		cacheFor(w, r)
@@ -65,6 +66,11 @@ func (s *Server) Handler() http.Handler {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-cache")
 		_, _ = w.Write(help)
+	})
+	mux.HandleFunc("GET /swagger", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-cache")
+		_, _ = w.Write(swagger)
 	})
 	files := http.FileServerFS(s.Static)
 	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
@@ -194,7 +200,8 @@ func versionedPage(static fs.FS, name, ver string) []byte {
 		return []byte(name + " missing")
 	}
 	out := string(b)
-	for _, a := range []string{"styles.css", "theme.css", "app.js", "help.js", "favicon.svg", "vendor/mermaid.min.js"} {
+	for _, a := range []string{"styles.css", "theme.css", "app.js", "help.js", "swagger.js", "favicon.svg", "vendor/mermaid.min.js",
+		"vendor/swagger-ui/swagger-ui-bundle.js", "vendor/swagger-ui/swagger-ui.css"} {
 		out = strings.ReplaceAll(out, `="`+a+`"`, `="`+a+"?v="+ver+`"`)
 	}
 	return []byte(out)

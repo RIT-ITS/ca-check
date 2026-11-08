@@ -1,0 +1,783 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "CA Chain Check API",
+    "version": "1.0",
+    "description": "Checks the TLS certificate chain a server sends: whether it reaches a root in the trust store, its order, validity dates, extra certificates, pending distrust and hostname. The chain is collected without trusting it, then analyzed. See also the plain-language guide at [/help](help)."
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "This server"
+    }
+  ],
+  "tags": [
+    {
+      "name": "check",
+      "description": "Run a chain check"
+    },
+    {
+      "name": "service",
+      "description": "Service information"
+    }
+  ],
+  "paths": {
+    "/api/check": {
+      "post": {
+        "tags": [
+          "check"
+        ],
+        "operationId": "check",
+        "summary": "Check a server's certificate chain",
+        "description": "Connects to every IP address the host resolves to (or to `connectIPs`), collects the chain each one sends, and analyzes it. A failed connection to one IP is reported on that IP's result, not as an HTTP error.\n\nEach check costs one rate-limit unit, plus one more for every four IP addresses tested.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckRequest"
+              },
+              "examples": {
+                "https": {
+                  "summary": "HTTPS on port 443",
+                  "value": {
+                    "host": "www.example.edu",
+                    "port": 443
+                  }
+                },
+                "smtp-auto": {
+                  "summary": "SMTP submission (TLS, then STARTTLS)",
+                  "value": {
+                    "host": "smtp.example.edu",
+                    "port": 587
+                  }
+                },
+                "smtp-forced": {
+                  "summary": "STARTTLS on a non-standard port",
+                  "value": {
+                    "host": "smtp.example.edu",
+                    "port": 2525,
+                    "starttls": "smtp"
+                  }
+                },
+                "connect-ips": {
+                  "summary": "Test specific IPs (like curl --resolve)",
+                  "value": {
+                    "host": "www.example.edu",
+                    "port": 443,
+                    "connectIPs": [
+                      "192.0.2.10"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Check finished. Look at each `results[].overall`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request was not valid, for example a bad hostname, port or STARTTLS protocol, or a private address this client may not test.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many checks from this address.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before trying again.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The hostname lookup failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/config": {
+      "get": {
+        "tags": [
+          "service"
+        ],
+        "operationId": "config",
+        "summary": "Options for this client",
+        "responses": {
+          "200": {
+            "description": "Options",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Config"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/healthz": {
+      "get": {
+        "tags": [
+          "service"
+        ],
+        "operationId": "healthz",
+        "summary": "Liveness check",
+        "responses": {
+          "200": {
+            "description": "The service is running.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "example": "ok\n"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CheckRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "host"
+        ],
+        "properties": {
+          "host": {
+            "type": "string",
+            "description": "Hostname or IP address. A hostname is sent as SNI.",
+            "example": "www.example.edu"
+          },
+          "port": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535,
+            "description": "TCP port. Defaults to 443, or to the protocol's usual port when `starttls` names one."
+          },
+          "starttls": {
+            "type": "string",
+            "enum": [
+              "smtp",
+              "imap",
+              "pop3",
+              "ftp",
+              "ldap",
+              "postgres",
+              "none"
+            ],
+            "description": "Leave out for automatic: on ports 21, 25, 587, 110, 143, 389 and 5432 the check tries TLS first, then STARTTLS for that port's protocol if the TLS handshake fails. A protocol name uses STARTTLS straight away on any port. `none` uses TLS only."
+          },
+          "connectIPs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "IP addresses to connect to instead of looking up the hostname. The hostname is still sent as SNI. This server may not allow it; see `GET /api/config`."
+          }
+        }
+      },
+      "CheckResponse": {
+        "type": "object",
+        "properties": {
+          "host": {
+            "type": "string"
+          },
+          "port": {
+            "type": "integer"
+          },
+          "starttls": {
+            "type": "string",
+            "description": "STARTTLS protocol the request asked for, if any."
+          },
+          "starttlsFallback": {
+            "type": "string",
+            "description": "STARTTLS protocol tried when TLS failed, on a common STARTTLS port."
+          },
+          "checkedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "resolution": {
+            "$ref": "#/components/schemas/Resolution"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IPResult"
+            },
+            "description": "One entry per IP address."
+          },
+          "consistency": {
+            "$ref": "#/components/schemas/Consistency"
+          },
+          "trustStore": {
+            "$ref": "#/components/schemas/TrustStoreInfo"
+          }
+        }
+      },
+      "Resolution": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": [
+              "dns",
+              "config_override",
+              "request_override",
+              "ip_literal"
+            ],
+            "description": "Where the IP addresses came from."
+          },
+          "ips": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "IP addresses tested."
+          },
+          "skipped": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "IP addresses not tested because of this server's per-host limit."
+          },
+          "ipv4Only": {
+            "type": "boolean",
+            "description": "This server tests IPv4 only."
+          },
+          "droppedIPv6": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "IPv6 addresses found but not tested."
+          }
+        }
+      },
+      "IPResult": {
+        "type": "object",
+        "properties": {
+          "ip": {
+            "type": "string"
+          },
+          "tested": {
+            "type": "boolean"
+          },
+          "denyReason": {
+            "type": "string",
+            "description": "Set when this server's policy does not allow testing this IP."
+          },
+          "error": {
+            "type": "string",
+            "description": "Set when the connection, STARTTLS or TLS handshake failed. There is no `analysis` then."
+          },
+          "tls": {
+            "$ref": "#/components/schemas/TLSInfo"
+          },
+          "analysis": {
+            "$ref": "#/components/schemas/Analysis"
+          },
+          "overall": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "warn",
+              "fail",
+              "info"
+            ],
+            "description": "Worst status for this IP."
+          }
+        }
+      },
+      "TLSInfo": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "string",
+            "example": "TLS 1.3"
+          },
+          "cipherSuite": {
+            "type": "string",
+            "example": "TLS_AES_128_GCM_SHA256"
+          },
+          "alpn": {
+            "type": "string"
+          },
+          "sni": {
+            "type": "string",
+            "description": "Server name sent. Empty for IP literals."
+          },
+          "handshakeMs": {
+            "type": "integer",
+            "description": "TLS handshake time in milliseconds."
+          },
+          "starttls": {
+            "type": "string",
+            "description": "STARTTLS protocol used before the handshake, if any."
+          }
+        }
+      },
+      "Analysis": {
+        "type": "object",
+        "properties": {
+          "chain": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Certificate"
+            },
+            "description": "Certificates in the order the server sent them."
+          },
+          "storeRoots": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Certificate"
+            },
+            "description": "Roots from the trust store that complete a path but were not sent."
+          },
+          "paths": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Path"
+            }
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Check"
+            }
+          },
+          "overall": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "warn",
+              "fail",
+              "info"
+            ]
+          },
+          "mermaid": {
+            "type": "string",
+            "description": "Mermaid flowchart source for the paths diagram."
+          },
+          "diagramKey": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KeyEntry"
+            },
+            "description": "Styles the diagram uses, in display order."
+          }
+        }
+      },
+      "Check": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "enum": [
+              "mozilla_root",
+              "order",
+              "validity",
+              "extra_certs",
+              "pending_distrust",
+              "hostname",
+              "root_sent",
+              "chain"
+            ],
+            "description": "`mozilla_root`: a path ends at a root in the trust store. `chain`: only when the server sent no certificates."
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "warn",
+              "fail",
+              "info"
+            ]
+          },
+          "detail": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Certificates or values the result is about, as `<certificate>: <problem>` where that applies."
+          }
+        }
+      },
+      "Path": {
+        "type": "object",
+        "properties": {
+          "nodes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Certificate `id`s, leaf first."
+          },
+          "terminal": {
+            "type": "string",
+            "enum": [
+              "mozilla_root",
+              "untrusted_root",
+              "incomplete"
+            ],
+            "description": "`mozilla_root`: ends at a root in the trust store."
+          },
+          "missingIssuer": {
+            "type": "string",
+            "description": "For incomplete paths: the issuer that could not be found."
+          },
+          "trusted": {
+            "type": "boolean"
+          },
+          "timeValid": {
+            "type": "boolean",
+            "description": "Every certificate on the path is within its dates."
+          },
+          "pendingDistrust": {
+            "type": "boolean"
+          },
+          "best": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Certificate": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Used by `paths` and the diagram."
+          },
+          "index": {
+            "type": "integer",
+            "description": "Position as sent; -1 if not sent."
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "presented",
+              "mozilla_store"
+            ],
+            "description": "`mozilla_store`: from the trust store, not sent."
+          },
+          "sha256": {
+            "type": "string",
+            "description": "Lowercase hex."
+          },
+          "sha1": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "issuer": {
+            "type": "string"
+          },
+          "subjectCN": {
+            "type": "string"
+          },
+          "issuerCN": {
+            "type": "string"
+          },
+          "serial": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "notBefore": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "notAfter": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "valid",
+              "expired",
+              "not_yet_valid",
+              "expiring_soon"
+            ]
+          },
+          "daysRemaining": {
+            "type": "integer"
+          },
+          "keyAlgorithm": {
+            "type": "string"
+          },
+          "keySize": {
+            "type": "integer"
+          },
+          "signatureAlgorithm": {
+            "type": "string"
+          },
+          "dnsNames": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "ipAddresses": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "emails": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "uris": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "subjectKeyId": {
+            "type": "string"
+          },
+          "authorityKeyId": {
+            "type": "string"
+          },
+          "isCA": {
+            "type": "boolean"
+          },
+          "maxPathLen": {
+            "type": "integer",
+            "nullable": true
+          },
+          "keyUsage": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "extKeyUsage": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "policies": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "ocspServers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "issuingUrls": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "crlDistributionPoints": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "selfSigned": {
+            "type": "boolean"
+          },
+          "inMozilla": {
+            "type": "boolean",
+            "description": "In the trust store."
+          },
+          "pendingDistrust": {
+            "$ref": "#/components/schemas/PendingDistrust"
+          },
+          "onTrustedPath": {
+            "type": "boolean"
+          },
+          "extraneous": {
+            "type": "string",
+            "enum": [
+              "unrelated",
+              "alternate_path",
+              "duplicate"
+            ],
+            "description": "Set when the certificate is not needed."
+          },
+          "duplicateOf": {
+            "type": "integer",
+            "description": "Position of the first copy, for duplicates."
+          },
+          "pem": {
+            "type": "string"
+          }
+        }
+      },
+      "PendingDistrust": {
+        "type": "object",
+        "properties": {
+          "fingerprint": {
+            "type": "string",
+            "description": "SHA-256, lowercase hex."
+          },
+          "date": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          }
+        }
+      },
+      "KeyEntry": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "node",
+              "link"
+            ]
+          },
+          "fill": {
+            "type": "string"
+          },
+          "stroke": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "width": {
+            "type": "number"
+          },
+          "dash": {
+            "type": "string",
+            "description": "SVG stroke-dasharray; empty is solid."
+          },
+          "hatch": {
+            "type": "boolean"
+          },
+          "class": {
+            "type": "string",
+            "description": "Mermaid class the node style uses."
+          }
+        }
+      },
+      "Consistency": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "warn",
+              "info"
+            ]
+          },
+          "detail": {
+            "type": "string"
+          },
+          "groups": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "description": "IP addresses grouped by identical chains."
+          }
+        }
+      },
+      "TrustStoreInfo": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer"
+          },
+          "loadedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Config": {
+        "type": "object",
+        "properties": {
+          "ipOverrideAllowed": {
+            "type": "boolean",
+            "description": "Whether this client may send `connectIPs`."
+          },
+          "maxIPsPerHost": {
+            "type": "integer"
+          },
+          "trustStore": {
+            "$ref": "#/components/schemas/TrustStoreInfo"
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

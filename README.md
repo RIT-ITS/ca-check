@@ -34,7 +34,7 @@ make run              # http://127.0.0.1:8080 (reads .env if present)
 
 `starttls` is optional (see above). `connectIPs` is optional and works like `curl --resolve`: the server connects to those IPs but still sends the hostname as SNI. The response has one entry in `results[]` per IP, each with its TLS info, chain analysis and Mermaid source.
 
-`GET /api/config` returns the UI flags. `GET /healthz` is the liveness check. The page at `/help` documents the API for users, with examples.
+`GET /api/config` returns the UI flags. `GET /healthz` is the liveness check. The page at `/help` documents the API for users, with examples. `/swagger` is an interactive Swagger UI reference built from `web/openapi.json` (OpenAPI 3.0.3); a test fails if the spec and the Go types drift apart. Swagger UI is vendored in `web/vendor/swagger-ui` (`make refresh-swagger`), so no outside scripts are loaded.
 
 ## Target access policy
 
@@ -123,3 +123,4 @@ All app settings are under `config.*`. The chart can also create:
 
 - `make refresh-roots` updates the embedded Mozilla snapshot in `assets/mozilla-roots.pem`.
 - `make refresh-mermaid` updates the vendored `web/vendor/mermaid.min.js`.
+- `make refresh-swagger` updates the vendored Swagger UI in `web/vendor/swagger-ui/` (version in `SWAGGER_UI_VERSION`).

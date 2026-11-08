@@ -1,9 +1,10 @@
 IMAGE ?= localhost/ca-chain-check:latest
 ROOTS_URL ?= https://ccadb.my.salesforce-sites.com/mozilla/IncludedRootsPEMTxt?TrustBitsInclude=Websites
 MERMAID_VERSION ?= 11.4.1
+SWAGGER_UI_VERSION ?= 5.17.14
 HELM ?= podman run --rm -v $(CURDIR)/deploy/helm:/charts:Z docker.io/alpine/helm:3.16.4
 
-.PHONY: build test run image up down refresh-roots refresh-mermaid helm-lint helm-template
+.PHONY: build test run image up down refresh-roots refresh-mermaid refresh-swagger helm-lint helm-template
 
 build:
 	CGO_ENABLED=0 go build -trimpath -o bin/server ./cmd/server
@@ -29,6 +30,12 @@ refresh-roots:
 
 refresh-mermaid:
 	curl -fsSL -o web/vendor/mermaid.min.js https://cdn.jsdelivr.net/npm/mermaid@$(MERMAID_VERSION)/dist/mermaid.min.js
+
+refresh-swagger:
+	mkdir -p web/vendor/swagger-ui
+	for f in swagger-ui-bundle.js swagger-ui.css LICENSE; do \
+	  curl -fsSL -o web/vendor/swagger-ui/$$f https://cdn.jsdelivr.net/npm/swagger-ui-dist@$(SWAGGER_UI_VERSION)/$$f || exit 1; \
+	done
 
 helm-lint:
 	$(HELM) lint /charts/ca-chain-check
