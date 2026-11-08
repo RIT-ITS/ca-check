@@ -24,7 +24,11 @@ var DefaultDenyCIDRs = []string{
 	"255.255.255.255/32", "::/128", "ff00::/8", "fe80::/10", "fd00:ec2::254/128",
 }
 
-const DefaultMozillaRootsURL = "https://ccadb.my.salesforce-sites.com/mozilla/IncludedRootsPEMTxt?TrustBitsInclude=Websites"
+const (
+	DefaultMozillaRootsURL   = "https://ccadb.my.salesforce-sites.com/mozilla/IncludedRootsPEMTxt?TrustBitsInclude=Websites"
+	DefaultCCADBStoresURL    = "https://ccadb.my.salesforce-sites.com/ccadb/AllIncludedRootCertsCSV"
+	DefaultMicrosoftRootsURL = "https://ccadb.my.salesforce-sites.com/microsoft/IncludedCACertificateReportForMSFTCSVPEM"
+)
 
 // PendingDistrust marks a CA (by SHA-256 fingerprint) as scheduled to lose trust.
 type PendingDistrust struct {
@@ -60,6 +64,11 @@ type Config struct {
 	RevocationTimeout time.Duration // per OCSP or CRL fetch
 
 	MozillaRootsURL   string
+	CCADBStoresURL    string
+	MicrosoftRootsURL string
+	// RequiredStores are the root programs that must all trust the chain
+	// for the trust check to pass.
+	RequiredStores []string
 	TruststoreRefresh time.Duration
 	ExpiringSoonDays  int
 
@@ -169,6 +178,11 @@ func LoadFrom(get func(string) string) (*Config, error) {
 	}
 
 	c.MozillaRootsURL = str("MOZILLA_ROOTS_URL", DefaultMozillaRootsURL)
+	c.CCADBStoresURL = str("CCADB_STORES_URL", DefaultCCADBStoresURL)
+	c.MicrosoftRootsURL = str("MICROSOFT_ROOTS_URL", DefaultMicrosoftRootsURL)
+	if c.RequiredStores, err = parseStores(str("REQUIRED_TRUST_STORES", "apple,chrome,microsoft,mozilla")); err != nil {
+		return nil, err
+	}
 
 	c.PendingDistrust = map[string]PendingDistrust{}
 	for _, pd := range ParsePendingDistrustEnv(get("PENDING_DISTRUST")) {
@@ -313,4 +327,26 @@ func ParsePendingDistrustYAML(data []byte) []PendingDistrust {
 		out = append(out, pd)
 	}
 	return out
+}
+
+// parseStores reads a comma-separated list of root program IDs.
+func parseStores(s string) ([]string, error) {
+	valid := map[string]bool{"apple": true, "chrome": true, "microsoft": true, "mozilla": true}
+	var out []string
+	seen := map[string]bool{}
+	for _, p := range strings.Split(s, ",") {
+		p = strings.ToLower(strings.TrimSpace(p))
+		if p == "" || seen[p] {
+			continue
+		}
+		if !valid[p] {
+			return nil, fmt.Errorf("REQUIRED_TRUST_STORES: unknown store %q (use apple, chrome, microsoft, mozilla)", p)
+		}
+		seen[p] = true
+		out = append(out, p)
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("REQUIRED_TRUST_STORES: name at least one store")
+	}
+	return out, nil
 }

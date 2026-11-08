@@ -61,7 +61,7 @@
 
   // What each test expects, phrased as a reference value.
   const EXPECTED = {
-    mozilla_root: "At least one path ends at a root in the trust store",
+    mozilla_root: "Every trust store checked trusts at least one path",
     order: "Leaf first, each certificate followed by its issuer",
     validity: "Every certificate on the path is currently valid",
     extra_certs: "Only the leaf and the intermediates it needs",
@@ -70,6 +70,39 @@
     revocation: "No certificate on the path is revoked (OCSP or CRL)",
     hostname: "Leaf certificate covers the hostname",
   };
+
+  // ---------- trust stores ----------
+  const STORES = ["apple", "chrome", "microsoft", "mozilla"];
+  const STORE_LABEL = { apple: "Apple", chrome: "Chrome", microsoft: "Microsoft", mozilla: "Mozilla" };
+  // Why each store matters, for stores whose reach isn't obvious from the name.
+  const STORE_TIP = {
+    mozilla: "Mozilla's list is not only for Firefox. Most Linux distributions, and tools such as Python (certifi), Node.js and curl's CA bundle, use it as their list of trusted roots.",
+  };
+  // A store name, with its explanation as a tooltip that also works with the
+  // keyboard and screen readers.
+  function storeName(store) {
+    const label = STORE_LABEL[store] || store;
+    const tip = STORE_TIP[store];
+    if (!tip) return label;
+    return h("span", { class: "tip", tabindex: "0", "data-tip": tip }, label, h("span", { class: "sr" }, ` (${tip})`));
+  }
+  // Text that starts with a store name ("Mozilla: no trusted path") gets the
+  // name's tooltip.
+  function storeText(text) {
+    const m = /^(Apple|Chrome|Microsoft|Mozilla)\b/.exec(text);
+    if (!m) return text;
+    return [storeName(m[1].toLowerCase()), text.slice(m[1].length)];
+  }
+  const STORE_WORD = { trusted: "trusted", limited: "limited", untrusted: "not trusted", absent: "not included" };
+  // items: [{store, status, required}] with status trusted | limited | untrusted | absent.
+  function storeList(items) {
+    return h("ul", { class: "stores" }, items.map((s) => {
+      const st = s.status === "trusted" ? "pass" : s.status === "limited" ? "warn"
+        : s.status === "untrusted" && s.required !== false ? "fail" : "neutral";
+      return h("li", { class: `tag ${st}` }, st !== "neutral" ? icon(st) : null,
+        storeName(s.store), h("span", { class: "store-word" }, STORE_WORD[s.status] + (s.required === false ? " (not required)" : "")));
+    }));
+  }
 
   // ---------- config ----------
   fetch("api/config").then((r) => r.json()).then((cfg) => {
@@ -80,8 +113,16 @@
   function renderStoreInfo(ts) {
     if (!ts) return;
     const when = ts.loadedAt ? fmtDateTime(ts.loadedAt) : "unknown";
-    const src = ts.source && ts.source.startsWith("http") ? "downloaded" : "built-in copy";
-    $("#store-info").textContent = `Root trust store: ${ts.count} roots (${src}), loaded ${when}.`;
+    const src = ts.source && !ts.source.startsWith("embedded") ? "downloaded" : "built-in copy";
+    const counts = ts.stores || {};
+    const parts = [];
+    STORES.filter((s) => counts[s]).forEach((s, i, all) => {
+      parts.push(storeName(s), ` ${counts[s]}`, i < all.length - 1 ? ", " : "");
+    });
+    const loaded = src === "downloaded" ? `Downloaded ${when}.` : `Built-in copy, loaded ${when}.`;
+    $("#store-info").replaceChildren(...(parts.length
+      ? ["Trust stores: ", ...parts, " roots. ", loaded]
+      : [`Trust store: ${ts.count} roots. `, loaded]));
   }
 
   // ---------- input ----------
@@ -277,6 +318,8 @@
     if (mr && mr.status === "fail") {
       if (/self-signed root/.test(mr.detail)) add("fail", "Get a certificate from a publicly trusted CA, or install your private root on every client that connects.");
       else add("fail", "Configure the server to send the missing intermediate certificate after the leaf.", mr.items);
+    } else if (mr && mr.status === "warn") {
+      add("warn", "Some trust stores don't trust this chain, so clients that use them will reject it. Use a CA whose root is in every store:", mr.items);
     }
     const ord = checks.order;
     if (ord && ord.status !== "pass") add(ord.status, "Reorder the chain file so each certificate is followed by its issuer:", ord.items);
@@ -324,7 +367,7 @@
       fixes.length
         ? h("ol", { class: "fixes" }, fixes.map((f) => h("li", {},
           h("span", { class: `flag ${f.status}`, style: "margin-right:8px" }, icon(f.status), FLAG_WORD[f.status]), f.text,
-          f.items && f.items.length ? h("ul", {}, f.items.map((it) => h("li", {}, it))) : null)))
+          f.items && f.items.length ? h("ul", {}, f.items.map((it) => h("li", {}, storeText(it)))) : null)))
         : h("p", { style: "margin:8px 0 0" }, "Every test passed. Nothing needs to change."));
   }
 
@@ -355,7 +398,10 @@
           h("th", { scope: "col" }, "Expected"), h("th", { scope: "col" }, "Flag"))),
         h("tbody", {}, a.checks.map((c) => h("tr", { class: c.status },
           h("td", { class: "test" }, c.title),
-          h("td", { class: "result" }, c.detail, c.items && c.items.length ? h("ul", {}, c.items.map((it) => h("li", {}, it))) : null),
+          h("td", { class: "result" }, c.detail,
+            // The store list below says the same as the warning's items.
+            c.items && c.items.length && !(c.id === "mozilla_root" && c.status === "warn") ? h("ul", {}, c.items.map((it) => h("li", {}, storeText(it)))) : null,
+            c.id === "mozilla_root" && a.trustStores && a.trustStores.length && c.status !== "fail" ? storeList(a.trustStores) : null),
           h("td", { class: "expected" }, EXPECTED[c.id] || ""),
           h("td", { class: "flagcell" }, flag(c.status)))))));
   }
@@ -473,8 +519,10 @@
       ["SHA-256", c.sha256, true], ["SHA-1", c.sha1, true],
       // Radar has a page per CA certificate (keyed by SHA-256) showing which
       // root stores include it. Leaf certificates have no page.
-      ["Root stores", c.isCA ? h("a", { href: `https://radar.cloudflare.com/certificate-transparency/ca/${c.sha256.toUpperCase()}`, target: "_blank", rel: "noopener noreferrer" },
-        "Check on Cloudflare Radar", h("span", { class: "sr" }, " (opens in a new tab)")) : null],
+      ["Root stores", c.isCA ? h("div", {},
+        c.stores ? storeList(STORES.map((s) => ({ store: s, status: c.stores[s] === "trusted" ? "trusted" : c.stores[s] === "limited" ? "limited" : "absent" }))) : null,
+        h("a", { href: `https://radar.cloudflare.com/certificate-transparency/ca/${c.sha256.toUpperCase()}`, target: "_blank", rel: "noopener noreferrer" },
+          "Check on Cloudflare Radar", h("span", { class: "sr" }, " (opens in a new tab)"))) : null],
       ["Subject key ID", c.subjectKeyId, true], ["Authority key ID", c.authorityKeyId, true],
       ["CA", c.isCA ? `Yes${c.maxPathLen !== undefined && c.maxPathLen !== null ? `, path length ≤ ${c.maxPathLen}` : ""}` : "No"],
       ["DNS names", (c.dnsNames || []).join(", ")], ["IP addresses", (c.ipAddresses || []).join(", ")],
@@ -531,6 +579,11 @@
         const [st, word] = TERM[p.terminal];
         const notes = [];
         if (p.best) notes.push(h("span", { class: "tag pass" }, "Best path"));
+        if (p.stores && p.stores.length) {
+          const names = [];
+          p.stores.forEach((s, i) => names.push(i ? ", " : "", storeName(s)));
+          notes.push(h("span", { class: "tag neutral" }, "Trusted by ", ...names));
+        }
         if (!p.timeValid) notes.push(h("span", { class: "tag fail" }, icon("fail"), "Validity problem"));
         if (p.pendingDistrust) notes.push(h("span", { class: "tag warn" }, icon("warn"), "Pending distrust"));
         return h("tr", {}, h("td", {}, flagWord(st, word)), h("td", { class: "route" }, parts), h("td", {}, h("span", { class: "c-flags" }, notes)));

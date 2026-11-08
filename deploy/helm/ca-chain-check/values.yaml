@@ -82,6 +82,10 @@ config:
   expiringSoonDays: 30
 
   mozillaRootsURL: "https://ccadb.my.salesforce-sites.com/mozilla/IncludedRootsPEMTxt?TrustBitsInclude=Websites"
+  ccadbStoresURL: "https://ccadb.my.salesforce-sites.com/ccadb/AllIncludedRootCertsCSV"
+  microsoftRootsURL: "https://ccadb.my.salesforce-sites.com/microsoft/IncludedCACertificateReportForMSFTCSVPEM"
+  # Root programs that must all trust the chain for the trust check to pass.
+  requiredTrustStores: "apple,chrome,microsoft,mozilla"
   truststoreRefresh: 24h
 
 # Static DNS overrides so servers in a cluster can be targeted directly.

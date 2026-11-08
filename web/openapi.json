@@ -402,6 +402,13 @@
               "$ref": "#/components/schemas/KeyEntry"
             },
             "description": "Styles the diagram uses, in display order."
+          },
+          "trustStores": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StoreResult"
+            },
+            "description": "One entry per root program, in the order Apple, Chrome, Microsoft, Mozilla."
           }
         }
       },
@@ -471,7 +478,8 @@
             "description": "For incomplete paths: the issuer that could not be found."
           },
           "trusted": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "The path ends at a root that at least one root program fully trusts."
           },
           "timeValid": {
             "type": "boolean",
@@ -482,6 +490,32 @@
           },
           "best": {
             "type": "boolean"
+          },
+          "stores": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "apple",
+                "chrome",
+                "microsoft",
+                "mozilla"
+              ]
+            },
+            "description": "Root programs that fully trust the root this path ends at."
+          },
+          "limitedStores": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "apple",
+                "chrome",
+                "microsoft",
+                "mozilla"
+              ]
+            },
+            "description": "Root programs that trust the end root only for certificates issued before a cutoff date."
           }
         }
       },
@@ -636,7 +670,7 @@
           },
           "inMozilla": {
             "type": "boolean",
-            "description": "In the trust store."
+            "description": "True when at least one root program (Apple, Chrome, Microsoft or Mozilla) fully trusts this root. The name is kept for compatibility."
           },
           "pendingDistrust": {
             "$ref": "#/components/schemas/PendingDistrust"
@@ -662,6 +696,23 @@
           },
           "revocation": {
             "$ref": "#/components/schemas/Revocation"
+          },
+          "stores": {
+            "type": "object",
+            "description": "Root programs that include this root, mapped to `trusted` or `limited` (Microsoft roots trusted only for certificates issued before a cutoff date). Only set for roots in the trust store data.",
+            "additionalProperties": {
+              "type": "string",
+              "enum": [
+                "trusted",
+                "limited"
+              ]
+            },
+            "example": {
+              "apple": "trusted",
+              "chrome": "trusted",
+              "microsoft": "trusted",
+              "mozilla": "trusted"
+            }
           }
         }
       },
@@ -756,6 +807,19 @@
           "loadedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "stores": {
+            "type": "object",
+            "description": "Number of roots each program fully trusts for server authentication.",
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "example": {
+              "apple": 116,
+              "chrome": 100,
+              "microsoft": 204,
+              "mozilla": 118
+            }
           }
         }
       },
@@ -828,6 +892,43 @@
           "nextUpdate": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "StoreResult": {
+        "type": "object",
+        "description": "Whether any path is trusted by one root program.",
+        "required": [
+          "store",
+          "label",
+          "status",
+          "required"
+        ],
+        "properties": {
+          "store": {
+            "type": "string",
+            "enum": [
+              "apple",
+              "chrome",
+              "microsoft",
+              "mozilla"
+            ]
+          },
+          "label": {
+            "type": "string",
+            "example": "Mozilla"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "trusted",
+              "limited",
+              "untrusted"
+            ]
+          },
+          "required": {
+            "type": "boolean",
+            "description": "Whether this program counts toward the `mozilla_root` check. Set by the server's REQUIRED_TRUST_STORES."
           }
         }
       }

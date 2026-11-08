@@ -45,6 +45,7 @@ func TestOpenAPIMatchesTypes(t *testing.T) {
 		"Certificate":      analyze.CertInfo{},
 		"KeyEntry":         analyze.KeyEntry{},
 		"PendingDistrust":  config.PendingDistrust{},
+		"StoreResult":      analyze.StoreResult{},
 		"Revocation":       analyze.Revocation{},
 		"RevocationSource": analyze.RevocationSource{},
 		"TrustStoreInfo":   truststore.Info{},

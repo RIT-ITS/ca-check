@@ -55,6 +55,9 @@ type Options struct {
 	// Revocation, when set, is called for each certificate on the best path
 	// with its issuer, concurrently. It must be safe for concurrent use.
 	Revocation func(cert, issuer *x509.Certificate) *Revocation
+	// RequiredStores are the root programs that must all trust a path for
+	// the trust check to pass. Empty means all of them.
+	RequiredStores []string
 }
 
 // Path is one issuance path from the leaf upward.
@@ -62,7 +65,9 @@ type Path struct {
 	Nodes         []string `json:"nodes"` // CertInfo IDs, leaf first
 	Terminal      string   `json:"terminal"`
 	MissingIssuer string   `json:"missingIssuer,omitempty"` // for incomplete paths
-	Trusted       bool     `json:"trusted"`                 // ends at a Mozilla root
+	Trusted       bool     `json:"trusted"`                 // ends at a root at least one program trusts
+	Stores        []string `json:"stores,omitempty"`        // programs that fully trust the end root
+	LimitedStores []string `json:"limitedStores,omitempty"` // programs that trust it only for older certificates
 	TimeValid     bool     `json:"timeValid"`               // every cert in validity window
 	Pending       bool     `json:"pendingDistrust"`         // passes through a pending-distrust CA
 	Best          bool     `json:"best"`
@@ -88,6 +93,16 @@ type Result struct {
 	// DiagramKey lists, in display order, only the node and link styles the
 	// diagram actually uses, with the colours it draws them in.
 	DiagramKey []KeyEntry `json:"diagramKey"`
+	// TrustStores says, for each root program, whether any path is trusted.
+	TrustStores []StoreResult `json:"trustStores"`
+}
+
+// StoreResult is the outcome for one root program.
+type StoreResult struct {
+	Store    string `json:"store"`    // apple | chrome | microsoft | mozilla
+	Label    string `json:"label"`    // display name
+	Status   string `json:"status"`   // trusted | limited | untrusted
+	Required bool   `json:"required"` // counts toward the trust check
 }
 
 type node struct {
@@ -144,6 +159,7 @@ func Analyze(presented []*x509.Certificate, o Options) *Result {
 	res.Paths = a.paths
 	a.markUsage(res)
 	a.checkRevocation()
+	res.TrustStores = a.storeResults()
 	res.Checks = a.checks(res)
 	for _, c := range res.Checks {
 		res.Overall = Worst(res.Overall, c.Status)
@@ -265,6 +281,17 @@ func (a *analyzer) scorePaths() {
 	for i := range a.paths {
 		p := &a.paths[i]
 		p.Trusted = p.Terminal == TermMozillaRoot
+		if end := a.info(p.Nodes[len(p.Nodes)-1]); p.Terminal != TermIncomplete && end != nil {
+			for st, lvl := range end.Stores {
+				if lvl == truststore.Trusted {
+					p.Stores = append(p.Stores, st)
+				} else {
+					p.LimitedStores = append(p.LimitedStores, st)
+				}
+			}
+			truststore.SortStores(p.Stores)
+			truststore.SortStores(p.LimitedStores)
+		}
 		p.TimeValid = true
 		for _, id := range p.Nodes {
 			ci := a.info(id)
@@ -277,8 +304,14 @@ func (a *analyzer) scorePaths() {
 		}
 	}
 	// Best path: trusted, time-valid, not pending, shortest; stable by discovery.
+	required := a.required()
 	score := func(p Path) int {
 		s := 0
+		for _, st := range p.Stores {
+			if contains(required, st) {
+				s += 16
+			}
+		}
 		if p.Trusted {
 			s += 8
 		}
@@ -306,6 +339,33 @@ func (a *analyzer) scorePaths() {
 		}
 		return score(a.paths[i]) > score(a.paths[j])
 	})
+}
+
+func (a *analyzer) required() []string {
+	if len(a.o.RequiredStores) > 0 {
+		return a.o.RequiredStores
+	}
+	return truststore.AllStores
+}
+
+// storeResults works out, per root program, the best trust any path gets.
+func (a *analyzer) storeResults() []StoreResult {
+	req := a.required()
+	var out []StoreResult
+	for _, st := range truststore.AllStores {
+		r := StoreResult{Store: st, Label: truststore.Label(st), Status: "untrusted", Required: contains(req, st)}
+		for _, p := range a.paths {
+			if contains(p.Stores, st) {
+				r.Status = truststore.Trusted
+				break
+			}
+			if contains(p.LimitedStores, st) {
+				r.Status = truststore.Limited
+			}
+		}
+		out = append(out, r)
+	}
+	return out
 }
 
 func (a *analyzer) bestPath() *Path {
@@ -377,10 +437,32 @@ func (a *analyzer) checks(res *Result) []Check {
 				trusted = appendUnique(trusted, last.SubjectCN)
 			}
 		}
-		if len(trusted) > 0 {
+		var ok, short []string
+		for _, sr := range res.TrustStores {
+			if !sr.Required {
+				continue
+			}
+			switch sr.Status {
+			case truststore.Trusted:
+				ok = append(ok, sr.Label)
+			case truststore.Limited:
+				short = append(short, sr.Label+": limited, only for certificates issued before a cutoff date")
+			default:
+				short = append(short, sr.Label+": no trusted path")
+			}
+		}
+		if len(trusted) > 0 && len(short) == 0 {
 			c.Status = Pass
-			c.Detail = fmt.Sprintf("%d of %d path(s) end at a root in the trust store.", countTrusted(a.paths), len(a.paths))
+			c.Detail = fmt.Sprintf("Trusted by %s. %d of %d path(s) end at a trusted root.", joinAnd(ok), countTrusted(a.paths), len(a.paths))
 			c.Items = trusted
+		} else if len(trusted) > 0 {
+			c.Status = Warn
+			if len(ok) > 0 {
+				c.Detail = fmt.Sprintf("Trusted by %s, but not by every trust store checked.", joinAnd(ok))
+			} else {
+				c.Detail = "The chain reaches a trusted root, but not one in the trust stores this server requires."
+			}
+			c.Items = short
 		} else {
 			c.Status = Fail
 			switch {
@@ -919,4 +1001,15 @@ func (a *analyzer) mermaid(res *Result) (string, []KeyEntry) {
 		}
 	}
 	return b.String(), key
+}
+
+// joinAnd joins names as "A, B and C".
+func joinAnd(s []string) string {
+	switch len(s) {
+	case 0:
+		return ""
+	case 1:
+		return s[0]
+	}
+	return strings.Join(s[:len(s)-1], ", ") + " and " + s[len(s)-1]
 }

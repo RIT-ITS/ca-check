@@ -64,8 +64,13 @@ type CertInfo struct {
 	IssuingURLs    []string `json:"issuingUrls,omitempty"`
 	CRLs           []string `json:"crlDistributionPoints,omitempty"`
 
-	SelfSigned      bool                    `json:"selfSigned"`
-	InMozilla       bool                    `json:"inMozilla"`
+	SelfSigned bool `json:"selfSigned"`
+	// InMozilla is true when at least one root program fully trusts this
+	// root. The name is kept for API compatibility.
+	InMozilla bool `json:"inMozilla"`
+	// Stores maps each root program that includes this root to "trusted" or
+	// "limited".
+	Stores          map[string]string       `json:"stores,omitempty"`
 	PendingDistrust *config.PendingDistrust `json:"pendingDistrust,omitempty"`
 
 	// Revocation is set for certificates on the best path whose issuer is
@@ -211,7 +216,12 @@ func describe(c *x509.Certificate, id string, index int, source string, o Option
 		ci.KeyAlgorithm = c.PublicKeyAlgorithm.String()
 	}
 	if o.Store != nil {
-		ci.InMozilla = o.Store.Contains(fp)
+		ci.Stores = o.Store.Trust(fp)
+		for _, lvl := range ci.Stores {
+			if lvl == truststore.Trusted {
+				ci.InMozilla = true
+			}
+		}
 	}
 	if pd, ok := o.Pending[fp]; ok {
 		pd := pd

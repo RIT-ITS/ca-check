@@ -105,7 +105,7 @@
           <tr><td><code>results[].analysis.checks[]</code></td><td>One entry per test, with <code>id</code>, <code>status</code>, <code>detail</code> and sometimes <code>items</code> (the certificates involved).</td></tr>
           <tr><td><code>results[].analysis.chain[]</code></td><td>The certificates in the order the server sent them, with subject, issuer, dates, fingerprints and PEM.</td></tr>
           <tr><td><code>results[].analysis.storeRoots[]</code></td><td>Roots from the trust store that complete a path but were not sent.</td></tr>
-          <tr><td><code>results[].analysis.paths[]</code></td><td>Every path from the leaf to a root, listed by certificate <code>id</code>. <code>terminal</code> is <code>mozilla_root</code> (a root in the trust store), <code>untrusted_root</code> or <code>incomplete</code>.</td></tr>
+          <tr><td><code>results[].analysis.paths[]</code></td><td>Every path from the leaf to a root, listed by certificate <code>id</code>. <code>terminal</code> is <code>mozilla_root</code> (a root at least one store trusts), <code>untrusted_root</code> or <code>incomplete</code>.</td></tr>
           <tr><td><code>consistency</code></td><td>Whether all tested IPs sent the same chain.</td></tr>
         </tbody>
       </table>
@@ -114,7 +114,7 @@
       <table class="params">
         <thead><tr><th scope="col">ID</th><th scope="col">Test</th></tr></thead>
         <tbody>
-          <tr><td><code>mozilla_root</code></td><td>At least one path ends at a root in the trust store.</td></tr>
+          <tr><td><code>mozilla_root</code></td><td>Each required trust store (Apple, Chrome, Microsoft, Mozilla by default) trusts at least one path. Warns when only some do. The result per store is in <code>analysis.trustStores</code>, and each path lists the stores that trust it in <code>stores</code>.</td></tr>
           <tr><td><code>order</code></td><td>Each certificate is followed by its issuer.</td></tr>
           <tr><td><code>validity</code></td><td>Certificates on the path are within their dates.</td></tr>
           <tr><td><code>extra_certs</code></td><td>No certificates that aren't needed.</td></tr>

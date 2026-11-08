@@ -3,8 +3,16 @@ package assets
 
 import _ "embed"
 
-// MozillaRootsPEM is a snapshot of the CCADB Mozilla roots (Websites trust
-// bit) used when the live list cannot be fetched. Refresh with `make refresh-roots`.
-//
-//go:embed mozilla-roots.pem
-var MozillaRootsPEM []byte
+// Snapshots of the CCADB reports the trust store is built from, used when
+// the live reports cannot be fetched. Refresh with `make refresh-roots`.
+var (
+	// MozillaRootsPEM: Mozilla roots with the Websites trust bit.
+	//go:embed mozilla-roots.pem
+	MozillaRootsPEM []byte
+	// RootStoresCSV: CCADB AllIncludedRootCertsCSV (status per root program).
+	//go:embed root-stores.csv
+	RootStoresCSV []byte
+	// MicrosoftRootsCSV: Microsoft's included CA report, with PEM.
+	//go:embed microsoft-roots.csv
+	MicrosoftRootsCSV []byte
+)

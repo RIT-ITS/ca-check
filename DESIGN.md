@@ -330,7 +330,7 @@ Nearly square. Controls, tables, the interpretation box and the plate use a 3px 
 ### Do:
 - **Do** keep the accent to the primary action, selected tab, focus ring and selection, and bar-edge to the header rule.
 - **Do** keep brand colours in local config (THEME_COLORS), never in the shared stylesheet.
-- **Do** call the root store "the trust store" in the interface, without naming its source.
+- **Do** say "trust store" in general interface text. Name Apple, Chrome, Microsoft and Mozilla only where the stores are listed side by side, and give Mozilla its tooltip explaining that its list is used well beyond Firefox.
 - **Do** pair every status colour with its word and its icon shape; hatch expired bars.
 - **Do** draw validity to scale on one shared axis with an ink today line.
 - **Do** use the xs to 2xl type tokens and the 4px spacing scale; keep tabular numerals on.

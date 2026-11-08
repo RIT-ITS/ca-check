@@ -37,7 +37,10 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	loader := &truststore.Loader{URL: cfg.MozillaRootsURL, Fallback: assets.MozillaRootsPEM}
+	loader := &truststore.Loader{
+		MozillaURL: cfg.MozillaRootsURL, StoresURL: cfg.CCADBStoresURL, MicrosoftURL: cfg.MicrosoftRootsURL,
+		Fallback: truststore.Sources{MozillaPEM: assets.MozillaRootsPEM, StoresCSV: assets.RootStoresCSV, MicrosoftCSV: assets.MicrosoftRootsCSV},
+	}
 	loader.Init(ctx)
 	go loader.Run(ctx, cfg.TruststoreRefresh)
 

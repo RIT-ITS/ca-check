@@ -10,3 +10,5 @@ require (
 )
 
 require golang.org/x/text v0.43.0 // indirect
+
+godebug x509negativeserial=1

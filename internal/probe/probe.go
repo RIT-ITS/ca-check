@@ -389,12 +389,13 @@ func (p *Prober) probeOne(ctx context.Context, client netip.Addr, r *IPResult, h
 		rev = p.Revocation.For(ctx, client)
 	}
 	r.Analysis = analyze.Analyze(certs, analyze.Options{
-		Revocation:   rev,
-		Host:         host, // VerifyHostname also handles IP-literal SANs
-		Now:          time.Now(),
-		ExpiringSoon: time.Duration(p.Cfg.ExpiringSoonDays) * 24 * time.Hour,
-		Store:        p.Store,
-		Pending:      p.Cfg.PendingDistrust,
+		Revocation:     rev,
+		Host:           host, // VerifyHostname also handles IP-literal SANs
+		Now:            time.Now(),
+		ExpiringSoon:   time.Duration(p.Cfg.ExpiringSoonDays) * 24 * time.Hour,
+		Store:          p.Store,
+		Pending:        p.Cfg.PendingDistrust,
+		RequiredStores: p.Cfg.RequiredStores,
 	})
 	r.Overall = r.Analysis.Overall
 	var fps []string

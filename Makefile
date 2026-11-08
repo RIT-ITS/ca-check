@@ -1,5 +1,7 @@
 IMAGE ?= localhost/ca-chain-check:latest
 ROOTS_URL ?= https://ccadb.my.salesforce-sites.com/mozilla/IncludedRootsPEMTxt?TrustBitsInclude=Websites
+STORES_URL ?= https://ccadb.my.salesforce-sites.com/ccadb/AllIncludedRootCertsCSV
+MICROSOFT_URL ?= https://ccadb.my.salesforce-sites.com/microsoft/IncludedCACertificateReportForMSFTCSVPEM
 MERMAID_VERSION ?= 11.4.1
 SWAGGER_UI_VERSION ?= 5.17.14
 HELM ?= podman run --rm -v $(CURDIR)/deploy/helm:/charts:Z docker.io/alpine/helm:3.16.4
@@ -26,6 +28,8 @@ down:
 
 refresh-roots:
 	curl -fsSL -o assets/mozilla-roots.pem '$(ROOTS_URL)'
+	curl -fsSL -o assets/root-stores.csv '$(STORES_URL)'
+	curl -fsSL -o assets/microsoft-roots.csv '$(MICROSOFT_URL)'
 	@grep -c 'BEGIN CERTIFICATE' assets/mozilla-roots.pem
 
 refresh-mermaid:

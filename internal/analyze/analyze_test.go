@@ -274,3 +274,60 @@ func TestMermaidEscape(t *testing.T) {
 		}
 	}
 }
+
+func storeWith(certs []*testpki.Cert, trust map[string]string) *truststore.Store {
+	m := map[string]map[string]string{}
+	xs := testpki.X509(certs...)
+	for _, c := range xs {
+		m[truststore.FingerprintSHA256(c)] = trust
+	}
+	return truststore.NewWithTrust(xs, m, "test")
+}
+
+func TestTrustStoresSomeMissing(t *testing.T) {
+	p := newPKI()
+	s := storeWith([]*testpki.Cert{p.root}, map[string]string{truststore.Microsoft: truststore.Trusted, truststore.Mozilla: truststore.Trusted})
+	r := Analyze(testpki.X509(p.leaf, p.inter), opts(s))
+	c := check(t, r, "mozilla_root")
+	if c.Status != Warn || !strings.Contains(strings.Join(c.Items, "|"), "Apple: no trusted path") {
+		t.Fatalf("got %s %q %v", c.Status, c.Detail, c.Items)
+	}
+	if r.TrustStores[2].Status != truststore.Trusted || r.TrustStores[0].Status != "untrusted" {
+		t.Errorf("trustStores = %+v", r.TrustStores)
+	}
+	// Only requiring the stores that trust it passes.
+	o := opts(s)
+	o.RequiredStores = []string{truststore.Microsoft, truststore.Mozilla}
+	wantStatus(t, Analyze(testpki.X509(p.leaf, p.inter), o), "mozilla_root", Pass)
+}
+
+func TestTrustStoresLimitedOnly(t *testing.T) {
+	p := newPKI()
+	s := storeWith([]*testpki.Cert{p.root}, map[string]string{truststore.Microsoft: truststore.Limited})
+	r := Analyze(testpki.X509(p.leaf, p.inter), opts(s))
+	wantStatus(t, r, "mozilla_root", Fail)
+	if r.Paths[0].Terminal != TermUntrustedRoot || len(r.Paths[0].LimitedStores) != 1 {
+		t.Errorf("path = %+v", r.Paths[0])
+	}
+}
+
+// A cross-sign lets each store find its own root: the check passes when the
+// union of paths covers every store.
+func TestTrustStoresSplitAcrossCrossSign(t *testing.T) {
+	oldRoot := testpki.Root("Old Root")
+	newRoot := testpki.Root("New Root")
+	cross := testpki.Intermediate("New Root", oldRoot, testpki.Opts{Key: newRoot.Key})
+	inter := testpki.Intermediate("Issuing CA", newRoot)
+	leaf := testpki.Leaf("www.example.test", inter)
+	m := map[string]map[string]string{
+		truststore.FingerprintSHA256(oldRoot.Cert): {truststore.Microsoft: truststore.Trusted},
+		truststore.FingerprintSHA256(newRoot.Cert): {truststore.Apple: truststore.Trusted, truststore.Chrome: truststore.Trusted, truststore.Mozilla: truststore.Trusted},
+	}
+	s := truststore.NewWithTrust(testpki.X509(oldRoot, newRoot), m, "test")
+	r := Analyze(testpki.X509(leaf, inter, cross), opts(s))
+	wantStatus(t, r, "mozilla_root", Pass)
+	wantStatus(t, r, "extra_certs", Pass)
+	if best := r.Paths[0]; !best.Best || len(best.Stores) != 3 {
+		t.Errorf("best path should be the 3-store one: %+v", best)
+	}
+}
