@@ -1,6 +1,8 @@
 apiVersion: v2
 name: ca-chain-check
-description: Inspect TLS certificate chains (order, expiry, extra CAs, Mozilla root trust).
+description: Inspect TLS certificate chains (order, expiry, extra CAs, root store trust, revocation).
 type: application
+# The app's default favicon (neutral palette), inlined so the chart needs no hosted image.
+icon: data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iNiIgZmlsbD0iIzFiMmE0MSIvPjxyZWN0IHk9IjI3IiB3aWR0aD0iMzIiIGhlaWdodD0iNSIgZmlsbD0iI2YyYzIzMCIvPjxwYXRoIGQ9Ik04IDloN3Y1SDh6bTkgNmg3djVoLTd6TTExLjUgMTR2My41SDE3IiBmaWxsPSJub25lIiBzdHJva2U9IiNmZmYiIHN0cm9rZS13aWR0aD0iMiIvPjwvc3ZnPg==
 version: 0.1.0
 appVersion: "0.1.0"
