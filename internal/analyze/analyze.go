@@ -661,11 +661,13 @@ func (a *analyzer) mermaid(res *Result) (string, []KeyEntry) {
 	all := append([]CertInfo{}, res.Chain...)
 	all = append(all, res.StoreRoots...)
 	declared := map[string]bool{}
+	var declaredIDs []string
 	for _, ci := range all {
 		if declared[ci.ID] || ci.Extraneous == "duplicate" {
 			continue
 		}
 		declared[ci.ID] = true
+		declaredIDs = append(declaredIDs, ci.ID)
 		where := fmt.Sprintf("sent #%d", ci.Index)
 		if ci.Index < 0 {
 			where = "trust store (not sent)"
@@ -731,6 +733,26 @@ func (a *analyzer) mermaid(res *Result) (string, []KeyEntry) {
 			e := edge{p.Nodes[len(p.Nodes)-1], id}
 			edges[e] = len(order)
 			order = append(order, e)
+		}
+	}
+	// Paths only start at the leaf, so certificates that chain to each other
+	// but not to the leaf (for example a leftover intermediate and its
+	// cross-sign) would otherwise float unconnected. Link every drawn
+	// certificate to every drawn certificate that verifiably signed it.
+	fpOf := map[string]string{}
+	for fp, id := range a.ids {
+		fpOf[id] = fp
+	}
+	for _, child := range declaredIDs {
+		for _, parent := range declaredIDs {
+			e := edge{child, parent}
+			if _, done := edges[e]; done || child == parent {
+				continue
+			}
+			if a.verifies(a.nodes[fpOf[child]].cert, a.nodes[fpOf[parent]].cert) {
+				edges[e] = len(order)
+				order = append(order, e)
+			}
 		}
 	}
 	for _, e := range order {

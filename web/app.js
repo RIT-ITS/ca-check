@@ -403,7 +403,7 @@
     axis.append(h("span", { class: "today-l", style: `left:${todayPct}%` }, "Today"));
 
     return h("section", { "aria-labelledby": "val-h" },
-      h("h2", { class: "sec", id: "val-h" }, "Validity", h("small", {}, "Each bar is drawn to scale on one timeline. The vertical line marks today.")),
+      h("h2", { class: "sec", id: "val-h" }, "Validity"),
       h("div", { class: "range" }, rows, axis));
   }
 

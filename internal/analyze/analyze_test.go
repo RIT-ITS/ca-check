@@ -100,6 +100,28 @@ func TestExtraUnrelatedCA(t *testing.T) {
 	}
 }
 
+// Unrelated certificates that chain to each other are drawn linked, even
+// though no path from the leaf reaches them.
+func TestUnrelatedChainLinked(t *testing.T) {
+	p := newPKI()
+	otherRoot := testpki.Root("Other Root")
+	otherInter := testpki.Intermediate("Other Intermediate", otherRoot)
+	r := Analyze(testpki.X509(p.leaf, p.inter, otherInter, otherRoot), opts(p.store))
+	for _, i := range []int{2, 3} {
+		if r.Chain[i].Extraneous != "unrelated" {
+			t.Errorf("chain[%d] extraneous = %q", i, r.Chain[i].Extraneous)
+		}
+	}
+	if !strings.Contains(r.Mermaid, "c3 -->|issued| c2") {
+		t.Errorf("unrelated pair not linked:\n%s", r.Mermaid)
+	}
+	for _, bad := range []string{"c2 -->|issued| c3", "c2 -->|issued| c1", "c3 -->|issued| c1"} {
+		if strings.Contains(r.Mermaid, bad) {
+			t.Errorf("spurious link %q:\n%s", bad, r.Mermaid)
+		}
+	}
+}
+
 func TestDuplicate(t *testing.T) {
 	p := newPKI()
 	r := Analyze(testpki.X509(p.leaf, p.inter, p.inter), opts(p.store))
