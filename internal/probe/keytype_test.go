@@ -116,3 +116,13 @@ func TestFetchChain12ReadsStaple(t *testing.T) {
 		t.Fatalf("%s, %d certs, staple %q, %s", keyType(certs[0]), len(certs), info.staple, info.Version)
 	}
 }
+
+// The main handshake's stapled response reaches the analysis.
+func TestStaplePassedToAnalysis(t *testing.T) {
+	ec, _ := certs(t)
+	ec.OCSPStaple = []byte("not a real response")
+	r := probeIP(t, tlsServer(t, tls.VersionTLS12, tls.VersionTLS13, ec))
+	if r.Analysis.Staple == nil || !r.Analysis.Staple.Present {
+		t.Fatalf("staple = %+v", r.Analysis.Staple)
+	}
+}

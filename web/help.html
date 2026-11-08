@@ -123,6 +123,7 @@
           <tr><td><code>extra_certs</code></td><td>No certificates that aren't needed.</td></tr>
           <tr><td><code>pending_distrust</code></td><td>No CA on the path is scheduled to lose trust.</td></tr>
           <tr><td><code>revocation</code></td><td>No certificate on the best path is revoked, according to its issuer's OCSP responder or CRL. Each certificate's answers are in <code>chain[].revocation</code>. This server may turn the check off.</td></tr>
+          <tr><td><code>ocsp_stapling</code></td><td>If the server staples an OCSP response, it is valid, current and says the leaf is good. Fails when the leaf requires stapling (Must-Staple) and there is no usable staple. Not stapling is fine otherwise. Details are in <code>analysis.staple</code>.</td></tr>
           <tr><td><code>hostname</code></td><td>The leaf certificate covers the hostname.</td></tr>
           <tr><td><code>root_sent</code></td><td>Note only: the server sends its root.</td></tr>
         </tbody>

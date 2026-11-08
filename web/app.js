@@ -68,6 +68,7 @@
     root_sent: "Root not sent (clients already have it)",
     pending_distrust: "No CA on the path is scheduled to lose trust",
     revocation: "No certificate on the path is revoked (OCSP or CRL)",
+    ocsp_stapling: "Stapled response is valid, or none is required",
     hostname: "Leaf certificate covers the hostname",
   };
 
@@ -199,7 +200,7 @@
     const titles = {
       mozilla_root: "Chains to a trusted root", order: "Certificates in issuance order",
       validity: "Validity periods", extra_certs: "No unnecessary certificates",
-      pending_distrust: "No CAs pending loss of trust", revocation: "Not revoked", hostname: "Hostname match",
+      pending_distrust: "No CAs pending loss of trust", revocation: "Not revoked", ocsp_stapling: "OCSP stapling", hostname: "Hostname match",
     };
     results.replaceChildren(h("div", { class: "sheet intro" },
       h("h1", {}, "Check the certificate chain a server sends"),
@@ -274,6 +275,11 @@
     return h("div", { class: wide ? "wide" : "" }, h("dt", {}, label), h("dd", { class: mono ? "mono" : "" }, value));
   }
 
+  function stapleWord(s) {
+    if (!s || !s.present) return s && s.mustStaple ? "None (required)" : "None";
+    return { good: "Good", revoked: "Revoked", unknown: "Unknown to responder", error: "Not usable" }[s.status] || s.status;
+  }
+
   const KEY_NAME = { rsa: "RSA", ecdsa: "ECDSA", other: "Other" };
 
   async function renderIP(panel, res, host) {
@@ -323,6 +329,7 @@
       metaItem("Cipher suite", t.cipherSuite, true, true), metaItem("ALPN", t.alpn || "none"),
       metaItem("Handshake", `${t.handshakeMs} ms`),
       v.keyType ? metaItem("Key type", onlyOne ? `${kt} only` : kt) : null,
+      metaItem("OCSP staple", stapleWord(a.staple)),
       t.starttls ? metaItem("STARTTLS", protoName(t.starttls)) : null));
     if (!two && res.keyTypeNote && !onlyOne) panel.append(h("p", { class: "keynote" }, res.keyTypeNote));
 
@@ -370,6 +377,12 @@
     if (ex && ex.status !== "pass") add(ex.status, "Remove these certificates from the chain file:", ex.items);
     const rv = checks.revocation;
     if (rv && rv.status === "fail") add("fail", "Replace the revoked certificate. Clients that check revocation will reject it:", rv.items);
+    const os = checks.ocsp_stapling;
+    if (os && os.status !== "pass") {
+      if (a.staple && a.staple.status === "revoked") add("fail", "The stapled OCSP response says the certificate is revoked. Replace the certificate.");
+      else if (a.staple && a.staple.present) add(os.status, "Fix OCSP stapling so the server sends a current response for this certificate, or turn stapling off if the certificate doesn't require it.");
+      else add(os.status, "Turn on OCSP stapling. The certificate requires it (Must-Staple).");
+    }
     const pd = checks.pending_distrust;
     if (pd && pd.status !== "pass") add(pd.status, "Switch to a certificate whose chain doesn't include these CAs:", pd.items);
     const hn = checks.hostname;

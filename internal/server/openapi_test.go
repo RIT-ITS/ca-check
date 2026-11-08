@@ -49,6 +49,7 @@ func TestOpenAPIMatchesTypes(t *testing.T) {
 		"StoreResult":      analyze.StoreResult{},
 		"Revocation":       analyze.Revocation{},
 		"RevocationSource": analyze.RevocationSource{},
+		"Staple":           analyze.Staple{},
 		"TrustStoreInfo":   truststore.Info{},
 	} {
 		s, ok := spec.Components.Schemas[schema]

@@ -9,6 +9,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/asn1"
 	"math/big"
 	"net"
 	"time"
@@ -29,6 +30,7 @@ type Opts struct {
 	DNS                 []string
 	IPs                 []net.IP
 	OCSP, CRL           []string // revocation URLs to put in the certificate
+	MustStaple          bool     // add the TLS Feature status_request extension
 }
 
 func gen(cn string, isCA bool, parent *Cert, o Opts) *Cert {
@@ -59,6 +61,12 @@ func gen(cn string, isCA bool, parent *Cert, o Opts) *Cert {
 		IPAddresses:           o.IPs,
 		OCSPServer:            o.OCSP,
 		CRLDistributionPoints: o.CRL,
+	}
+	if o.MustStaple {
+		// TLS Feature (RFC 7633): SEQUENCE { INTEGER 5 }.
+		tmpl.ExtraExtensions = append(tmpl.ExtraExtensions, pkix.Extension{
+			Id: asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 1, 24}, Value: []byte{0x30, 0x03, 0x02, 0x01, 0x05},
+		})
 	}
 	if isCA {
 		tmpl.KeyUsage = x509.KeyUsageCertSign | x509.KeyUsageCRLSign

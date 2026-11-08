@@ -426,6 +426,9 @@
               "$ref": "#/components/schemas/StoreResult"
             },
             "description": "One entry per root program, in the order Apple, Chrome, Microsoft, Mozilla."
+          },
+          "staple": {
+            "$ref": "#/components/schemas/Staple"
           }
         }
       },
@@ -441,6 +444,7 @@
               "extra_certs",
               "pending_distrust",
               "revocation",
+              "ocsp_stapling",
               "hostname",
               "root_sent",
               "chain"
@@ -980,6 +984,49 @@
               "fail",
               "info"
             ]
+          }
+        }
+      },
+      "Staple": {
+        "type": "object",
+        "description": "The OCSP response the server stapled to the handshake, checked against the leaf and its issuer on the best path.",
+        "required": [
+          "present",
+          "mustStaple"
+        ],
+        "properties": {
+          "present": {
+            "type": "boolean",
+            "description": "The server stapled a response."
+          },
+          "mustStaple": {
+            "type": "boolean",
+            "description": "The leaf has the TLS Feature extension with status_request (Must-Staple)."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "good",
+              "revoked",
+              "unknown",
+              "error"
+            ],
+            "description": "`error`: the staple can't be used (bad signature, wrong certificate, expired, or the issuer is unknown); see `error`."
+          },
+          "thisUpdate": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "nextUpdate": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "revokedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "error": {
+            "type": "string"
           }
         }
       }

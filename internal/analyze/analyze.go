@@ -97,6 +97,8 @@ type Result struct {
 	DiagramKey []KeyEntry `json:"diagramKey"`
 	// TrustStores says, for each root program, whether any path is trusted.
 	TrustStores []StoreResult `json:"trustStores"`
+	// Staple is the OCSP stapling result for the leaf.
+	Staple *Staple `json:"staple,omitempty"`
 }
 
 // StoreResult is the outcome for one root program.
@@ -162,6 +164,7 @@ func Analyze(presented []*x509.Certificate, o Options) *Result {
 	a.markUsage(res)
 	a.checkRevocation()
 	res.TrustStores = a.storeResults()
+	res.Staple = a.staple()
 	res.Checks = a.checks(res)
 	for _, c := range res.Checks {
 		res.Overall = Worst(res.Overall, c.Status)
@@ -661,7 +664,10 @@ func (a *analyzer) checks(res *Result) []Check {
 		out = append(out, a.revocationCheck(res))
 	}
 
-	// 8. Hostname
+	// 8. OCSP stapling
+	out = append(out, a.stapleCheck(res))
+
+	// 9. Hostname
 	if a.o.Host != "" {
 		c := Check{ID: "hostname", Title: "Leaf certificate matches hostname"}
 		leafCert := a.nodes[a.order[0]].cert

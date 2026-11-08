@@ -204,7 +204,7 @@ The page follows the OS colour scheme. In dark, the ground and sheet go charcoal
 A navy-and-snow palette with one teal signal, a yellow band rule and four muted status inks. All non-status tokens are themeable per deployment.
 
 ### Primary
-- **Hat Teal** (accent): the primary action (Check chain), the selected tab's underline, focus rings, link hover underline, text selection (30% mix) and the loading meter. Text on it is pure black (accent-ink); hover lightens to accent-hover. It is never a status colour.
+- **Hat Teal** (accent): the primary action (Check chain), the selected tab's underline, the selected certificate segment, focus rings, link hover underline, text selection (30% mix) and the loading meter. Text on it is pure black (accent-ink); hover lightens to accent-hover. It is never a status colour.
 - **Pom-pom Yellow** (bar-edge): the 3px rule under the header band and the favicon's base stripe. Nothing else.
 
 ### Neutral
@@ -303,6 +303,12 @@ Nearly square. Controls, tables, the interpretation box and the plate use a 3px 
 
 ### Navigation (IP tabs)
 - Mono, Body Small, muted; each tab carries its status icon (labelled) plus the IP. Selected tab is ink, 600, with a 3px accent underline overlapping the strip's hairline. Scrolls horizontally when there are many IPs.
+
+### Certificate switch (RSA / ECDSA)
+When a server has both an RSA and an ECDSA certificate, the IP panel opens with a one-line note and a two-segment switch ("ECDSA certificate" / "RSA certificate"), each segment carrying its result's flag icon. Segments are quiet buttons on a strong hairline; the selected one is filled with the accent, like the selected tab, with accent-ink text. aria-pressed marks the selection.
+
+### Store badges
+Root store results (Apple, Chrome, Microsoft, Mozilla) use the tag style: status icon, bold store name, regular status word. A store whose reach isn't obvious from its name (Mozilla) gets a dotted underline and a tooltip, shown on hover and keyboard focus and repeated in screen-reader text.
 
 ### Flags
 - Word plus authored icon, Flag type, tinted by status. They sit in their own column in the result table and paths table, and inline as smaller 600-weight tags in certificate rows.
