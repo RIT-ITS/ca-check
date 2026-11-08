@@ -55,6 +55,7 @@ type TLSInfo struct {
 	SNI         string `json:"sni,omitempty"`
 	HandshakeMS int64  `json:"handshakeMs"`
 	StartTLS    string `json:"starttls,omitempty"` // protocol used, if any
+	staple      []byte // stapled OCSP response, if any
 }
 
 // IPResult is the outcome for one target IP.
@@ -66,7 +67,23 @@ type IPResult struct {
 	TLS        *TLSInfo        `json:"tls,omitempty"`
 	Analysis   *analyze.Result `json:"analysis,omitempty"`
 	Overall    string          `json:"overall"`
-	chainKey   string
+	// KeyType is the leaf's key type: "rsa", "ecdsa" or "other".
+	KeyType string `json:"keyType,omitempty"`
+	// Alternate is the chain the server sends to clients that ask for the
+	// other key type, when it has a second certificate.
+	Alternate *AltResult `json:"alternate,omitempty"`
+	// KeyTypeNote explains why there is no Alternate.
+	KeyTypeNote string `json:"keyTypeNote,omitempty"`
+	chainKey    string
+}
+
+// AltResult is the second chain of a server with both an RSA and an ECDSA
+// certificate.
+type AltResult struct {
+	KeyType  string          `json:"keyType"`
+	TLS      *TLSInfo        `json:"tls"`
+	Analysis *analyze.Result `json:"analysis"`
+	Overall  string          `json:"overall"`
 }
 
 // Resolution reports how IPs were obtained.
@@ -384,25 +401,124 @@ func (p *Prober) probeOne(ctx context.Context, client netip.Addr, r *IPResult, h
 		return
 	}
 	r.TLS = info
+	r.KeyType = keyType(certs[0])
+
+	// Ask for the other key type's certificate.
+	var altCerts []*x509.Certificate
+	var altInfo *TLSInfo
+	if want := otherKeyType(r.KeyType); p.Cfg.CheckAltKeyType && want != "" {
+		altCerts, altInfo, err = p.attempt(ctx, host, port, info.StartTLS, ip, want)
+		switch {
+		case err != nil:
+			r.KeyTypeNote = altFailNote(r.KeyType, want, err)
+			altCerts = nil
+		case keyType(altCerts[0]) != want:
+			r.KeyTypeNote = fmt.Sprintf("The server has only an %s certificate.", keyTypeName(r.KeyType))
+			altCerts = nil
+		}
+	}
+
 	var rev func(cert, issuer *x509.Certificate) *analyze.Revocation
 	if p.Revocation != nil {
 		rev = p.Revocation.For(ctx, client)
 	}
-	r.Analysis = analyze.Analyze(certs, analyze.Options{
-		Revocation:     rev,
-		Host:           host, // VerifyHostname also handles IP-literal SANs
-		Now:            time.Now(),
-		ExpiringSoon:   time.Duration(p.Cfg.ExpiringSoonDays) * 24 * time.Hour,
-		Store:          p.Store,
-		Pending:        p.Cfg.PendingDistrust,
-		RequiredStores: p.Cfg.RequiredStores,
-	})
+	analyzeChain := func(certs []*x509.Certificate, info *TLSInfo) *analyze.Result {
+		return analyze.Analyze(certs, analyze.Options{
+			Revocation:     rev,
+			Host:           host, // VerifyHostname also handles IP-literal SANs
+			Now:            time.Now(),
+			ExpiringSoon:   time.Duration(p.Cfg.ExpiringSoonDays) * 24 * time.Hour,
+			Store:          p.Store,
+			Pending:        p.Cfg.PendingDistrust,
+			RequiredStores: p.Cfg.RequiredStores,
+			Staple:         info.staple,
+		})
+	}
+	var wg sync.WaitGroup
+	if altCerts != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			alt := &AltResult{KeyType: keyType(altCerts[0]), TLS: altInfo, Analysis: analyzeChain(altCerts, altInfo)}
+			alt.Overall = alt.Analysis.Overall
+			r.Alternate = alt
+		}()
+	}
+	r.Analysis = analyzeChain(certs, info)
+	wg.Wait()
 	r.Overall = r.Analysis.Overall
+	key := chainKey(r.Analysis)
+	if r.Alternate != nil {
+		r.Overall = analyze.Worst(r.Overall, r.Alternate.Overall)
+		key += "|" + chainKey(r.Alternate.Analysis)
+	}
+	r.chainKey = key
+}
+
+func chainKey(a *analyze.Result) string {
 	var fps []string
-	for _, c := range r.Analysis.Chain {
+	for _, c := range a.Chain {
 		fps = append(fps, c.SHA256)
 	}
-	r.chainKey = strings.Join(fps, ",")
+	return strings.Join(fps, ",")
+}
+
+// keyType names the leaf's key type for choosing a certificate.
+func keyType(c *x509.Certificate) string {
+	switch c.PublicKeyAlgorithm {
+	case x509.RSA:
+		return "rsa"
+	case x509.ECDSA:
+		return "ecdsa"
+	}
+	return "other"
+}
+
+func otherKeyType(t string) string {
+	switch t {
+	case "rsa":
+		return "ecdsa"
+	case "ecdsa":
+		return "rsa"
+	}
+	return ""
+}
+
+func keyTypeName(t string) string {
+	switch t {
+	case "rsa":
+		return "RSA"
+	case "ecdsa":
+		return "ECDSA"
+	}
+	return t
+}
+
+// altFailNote explains a failed handshake that asked for the other key type.
+func altFailNote(have, want string, err error) string {
+	msg := err.Error()
+	switch {
+	case strings.Contains(msg, "protocol version"):
+		return fmt.Sprintf("Could not check for an %s certificate: the server only allows TLS 1.3, and this check needs TLS 1.2 to ask for one.", keyTypeName(want))
+	case strings.Contains(msg, "handshake failure"), strings.Contains(msg, "insufficient security"):
+		return fmt.Sprintf("The server has only an %s certificate.", keyTypeName(have))
+	}
+	return fmt.Sprintf("Could not check for an %s certificate: %s", keyTypeName(want), msg)
+}
+
+// Cipher suites that make a TLS 1.2 server pick a certificate of one key type.
+var suitesFor = map[string][]uint16{
+	"ecdsa": {
+		tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256, tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+		tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256, tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
+		tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
+	},
+	"rsa": {
+		tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256, tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+		tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256, tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
+		tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA, tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
+		tls.TLS_RSA_WITH_AES_256_GCM_SHA384, tls.TLS_RSA_WITH_AES_128_CBC_SHA, tls.TLS_RSA_WITH_AES_256_CBC_SHA,
+	},
 }
 
 // connectError marks a failure to open the TCP connection, which a STARTTLS
@@ -416,19 +532,23 @@ func (e *connectError) Error() string { return e.msg }
 // handshake fails and fallback names a protocol, reconnects and tries
 // STARTTLS.
 func (p *Prober) handshake(ctx context.Context, host string, port int, starttls, fallback string, ip netip.Addr) ([]*x509.Certificate, *TLSInfo, error) {
-	certs, info, err := p.attempt(ctx, host, port, starttls, ip)
+	certs, info, err := p.attempt(ctx, host, port, starttls, ip, "")
 	var ce *connectError
 	if err == nil || starttls != "" || fallback == "" || errors.As(err, &ce) || ctx.Err() != nil {
 		return certs, info, err
 	}
-	certs, info, err2 := p.attempt(ctx, host, port, fallback, ip)
+	certs, info, err2 := p.attempt(ctx, host, port, fallback, ip, "")
 	if err2 == nil {
 		return certs, info, nil
 	}
 	return nil, nil, fmt.Errorf("%s. STARTTLS (%s) also failed: %s", err, fallback, err2)
 }
 
-func (p *Prober) attempt(ctx context.Context, host string, port int, starttls string, ip netip.Addr) ([]*x509.Certificate, *TLSInfo, error) {
+// attempt does one handshake. With only set ("rsa" or "ecdsa") it offers
+// TLS 1.2 with just that key type's cipher suites, so a server with two
+// certificates sends that one, and reads the chain without finishing the
+// handshake (see fetchChain12).
+func (p *Prober) attempt(ctx context.Context, host string, port int, starttls string, ip netip.Addr, only string) ([]*x509.Certificate, *TLSInfo, error) {
 	addr := net.JoinHostPort(ip.String(), strconv.Itoa(port))
 	dctx, cancel := context.WithTimeout(ctx, p.Cfg.DialTimeout)
 	defer cancel()
@@ -463,6 +583,23 @@ func (p *Prober) attempt(ctx context.Context, host string, port int, starttls st
 	} else {
 		conf.NextProtos = []string{"h2", "http/1.1"}
 	}
+	if only != "" {
+		// Read the other key type's chain with a hand-built TLS 1.2 hello.
+		_ = raw.SetDeadline(start.Add(p.Cfg.HandshakeTimeout))
+		hsStart := time.Now()
+		ch, err := fetchChain12(raw, sni, suitesFor[only])
+		if err != nil {
+			return nil, nil, fmt.Errorf("TLS handshake with %s failed: %s", addr, cleanErr(err))
+		}
+		return ch.certs, &TLSInfo{
+			Version:     tls.VersionName(tls.VersionTLS12),
+			CipherSuite: tls.CipherSuiteName(ch.suite),
+			SNI:         sni,
+			HandshakeMS: time.Since(hsStart).Milliseconds(),
+			StartTLS:    starttls,
+			staple:      ch.staple,
+		}, nil
+	}
 	conn := tls.Client(raw, conf)
 	hctx, hcancel := context.WithDeadline(ctx, start.Add(p.Cfg.HandshakeTimeout))
 	defer hcancel()
@@ -479,6 +616,7 @@ func (p *Prober) attempt(ctx context.Context, host string, port int, starttls st
 		SNI:         sni,
 		HandshakeMS: time.Since(hsStart).Milliseconds(),
 		StartTLS:    starttls,
+		staple:      st.OCSPResponse,
 	}, nil
 }
 

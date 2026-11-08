@@ -58,6 +58,8 @@ type Options struct {
 	// RequiredStores are the root programs that must all trust a path for
 	// the trust check to pass. Empty means all of them.
 	RequiredStores []string
+	// Staple is the OCSP response the server stapled, if any.
+	Staple []byte
 }
 
 // Path is one issuance path from the leaf upward.

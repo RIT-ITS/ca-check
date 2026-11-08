@@ -61,6 +61,7 @@ type Config struct {
 	HandshakeTimeout time.Duration
 
 	CheckRevocation   bool          // ask OCSP responders and CRLs about the best path
+	CheckAltKeyType   bool          // also ask for the other key type's certificate (RSA/ECDSA)
 	RevocationTimeout time.Duration // per OCSP or CRL fetch
 
 	MozillaRootsURL   string
@@ -68,7 +69,7 @@ type Config struct {
 	MicrosoftRootsURL string
 	// RequiredStores are the root programs that must all trust the chain
 	// for the trust check to pass.
-	RequiredStores []string
+	RequiredStores    []string
 	TruststoreRefresh time.Duration
 	ExpiringSoonDays  int
 
@@ -147,6 +148,9 @@ func LoadFrom(get func(string) string) (*Config, error) {
 
 	if c.CheckRevocation, err = strconv.ParseBool(str("CHECK_REVOCATION", "true")); err != nil {
 		return nil, fail("CHECK_REVOCATION", err)
+	}
+	if c.CheckAltKeyType, err = strconv.ParseBool(str("CHECK_ALT_KEY_TYPE", "true")); err != nil {
+		return nil, fail("CHECK_ALT_KEY_TYPE", err)
 	}
 	if c.DisableIPv6, err = strconv.ParseBool(str("DISABLE_IPV6", "false")); err != nil {
 		return nil, fail("DISABLE_IPV6", err)

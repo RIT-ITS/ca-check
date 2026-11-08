@@ -37,6 +37,7 @@ func TestOpenAPIMatchesTypes(t *testing.T) {
 		"CheckResponse":    probe.Response{},
 		"Resolution":       probe.Resolution{},
 		"IPResult":         probe.IPResult{},
+		"AltResult":        probe.AltResult{},
 		"TLSInfo":          probe.TLSInfo{},
 		"Consistency":      probe.Consistency{},
 		"Analysis":         analyze.Result{},

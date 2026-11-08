@@ -24,6 +24,7 @@ data:
   DIAL_TIMEOUT: {{ $c.dialTimeout | quote }}
   HANDSHAKE_TIMEOUT: {{ $c.handshakeTimeout | quote }}
   CHECK_REVOCATION: {{ ternary "true" "false" (ne $c.checkRevocation false) | quote }}
+  CHECK_ALT_KEY_TYPE: {{ ternary "true" "false" (ne $c.checkAltKeyType false) | quote }}
   REVOCATION_TIMEOUT: {{ $c.revocationTimeout | default "5s" | quote }}
   EXPIRING_SOON_DAYS: {{ $c.expiringSoonDays | quote }}
   MOZILLA_ROOTS_URL: {{ $c.mozillaRootsURL | quote }}

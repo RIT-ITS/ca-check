@@ -323,6 +323,23 @@
               "info"
             ],
             "description": "Worst status for this IP."
+          },
+          "keyType": {
+            "type": "string",
+            "enum": [
+              "rsa",
+              "ecdsa",
+              "other"
+            ],
+            "description": "Key type of the leaf in `analysis`."
+          },
+          "alternate": {
+            "$ref": "#/components/schemas/AltResult"
+          },
+          "keyTypeNote": {
+            "type": "string",
+            "description": "Why there is no `alternate`: the server has only one certificate, or it could not be asked (for example a TLS 1.3-only server).",
+            "example": "The server has only an ECDSA certificate."
           }
         }
       },
@@ -929,6 +946,40 @@
           "required": {
             "type": "boolean",
             "description": "Whether this program counts toward the `mozilla_root` check. Set by the server's REQUIRED_TRUST_STORES."
+          }
+        }
+      },
+      "AltResult": {
+        "type": "object",
+        "description": "The second chain, from a server that has both an RSA and an ECDSA certificate. Found with a TLS 1.2 handshake offering only the other key type's cipher suites. `overall` on the IP result is the worse of the two.",
+        "required": [
+          "keyType",
+          "tls",
+          "analysis",
+          "overall"
+        ],
+        "properties": {
+          "keyType": {
+            "type": "string",
+            "enum": [
+              "rsa",
+              "ecdsa"
+            ]
+          },
+          "tls": {
+            "$ref": "#/components/schemas/TLSInfo"
+          },
+          "analysis": {
+            "$ref": "#/components/schemas/Analysis"
+          },
+          "overall": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "warn",
+              "fail",
+              "info"
+            ]
           }
         }
       }

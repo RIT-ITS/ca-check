@@ -78,6 +78,8 @@ config:
   # OCSP and CRL checks for the best path. Needs egress to ports 80 and 443
   # (add 80 to networkPolicy.egressPorts if the NetworkPolicy is on).
   checkRevocation: true
+  # Second handshake per IP to find a server's other (RSA or ECDSA) certificate.
+  checkAltKeyType: true
   revocationTimeout: 5s
   expiringSoonDays: 30
 

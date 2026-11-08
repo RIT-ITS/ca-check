@@ -274,6 +274,8 @@
     return h("div", { class: wide ? "wide" : "" }, h("dt", {}, label), h("dd", { class: mono ? "mono" : "" }, value));
   }
 
+  const KEY_NAME = { rsa: "RSA", ecdsa: "ECDSA", other: "Other" };
+
   async function renderIP(panel, res, host) {
     if (res.denyReason) {
       panel.append(notice("info", "This address was not tested", res.denyReason));
@@ -283,18 +285,48 @@
       panel.append(notice("fail", "Could not complete a TLS handshake", res.error));
       return;
     }
-    const a = res.analysis;
-    const t = res.tls || {};
+    const views = [{ keyType: res.keyType, tls: res.tls, analysis: res.analysis }];
+    if (res.alternate) views.push({ keyType: res.alternate.keyType, tls: res.alternate.tls, analysis: res.alternate.analysis });
+    if (views.length === 1) {
+      await renderView(panel, res, views[0], host, false);
+      return;
+    }
+    // Two certificates: a switch between them, each rendered when first shown.
+    const bodies = views.map(() => h("div", {}));
+    const done = [];
+    const btns = views.map((v, i) => {
+      const st = v.analysis.overall || "info";
+      return h("button", { type: "button", class: "seg", "aria-pressed": i === 0 ? "true" : "false", onclick: () => show(i) },
+        h("span", { class: `flag ${st}` }, icon(st, FLAG_WORD[st])), `${KEY_NAME[v.keyType] || v.keyType} certificate`);
+    });
+    async function show(i) {
+      btns.forEach((b, j) => b.setAttribute("aria-pressed", i === j ? "true" : "false"));
+      bodies.forEach((b, j) => { b.hidden = i !== j; });
+      if (!done[i]) { done[i] = true; await renderView(bodies[i], res, views[i], host, true); }
+    }
+    panel.append(h("div", { class: "keytypes" },
+      h("p", {}, "This server has two certificates. Each client gets the one that matches what it supports."),
+      h("div", { class: "seg-group", role: "group", "aria-label": "Certificate to show" }, btns)), ...bodies);
+    await show(0);
+  }
+
+  async function renderView(panel, res, v, host, two) {
+    const a = v.analysis;
+    const t = v.tls || {};
     const byId = {};
     for (const c of [...a.chain, ...(a.storeRoots || [])]) if (!byId[c.id]) byId[c.id] = c;
+    const kt = KEY_NAME[v.keyType] || v.keyType;
+    const onlyOne = !two && /^The server has only/.test(res.keyTypeNote || "");
 
     panel.append(h("dl", { class: "meta" },
       metaItem("IP address", res.ip, true), metaItem("Protocol", t.version),
       metaItem("Cipher suite", t.cipherSuite, true, true), metaItem("ALPN", t.alpn || "none"),
       metaItem("Handshake", `${t.handshakeMs} ms`),
+      v.keyType ? metaItem("Key type", onlyOne ? `${kt} only` : kt) : null,
       t.starttls ? metaItem("STARTTLS", protoName(t.starttls)) : null));
+    if (!two && res.keyTypeNote && !onlyOne) panel.append(h("p", { class: "keynote" }, res.keyTypeNote));
 
-    panel.append(interpretation(a, host, t.starttls));
+    panel.append(interpretation(a, host, t.starttls, two ? kt : ""));
     panel.append(resultTable(a));
     panel.append(validitySection(a));
     panel.append(chainSection(a));
@@ -309,7 +341,7 @@
   }
 
   // ---------- interpretation: verdict + fixes ----------
-  function interpretation(a, host, viaStartTLS) {
+  function interpretation(a, host, viaStartTLS, keyLabel) {
     const checks = Object.fromEntries(a.checks.map((c) => [c.id, c]));
     const fixes = [];
     const add = (status, text, items) => fixes.push({ status, text, items });
@@ -356,7 +388,7 @@
     fixes.sort((x, y) => ({ fail: 0, warn: 1, info: 2 })[x.status] - ({ fail: 0, warn: 1, info: 2 })[y.status]);
     const copyLabel = h("span", {}, "Copy summary");
     const copyBtn = h("button", { class: "btn-quiet", type: "button", onclick: async () => {
-      try { await navigator.clipboard.writeText(summaryText(a, host, viaStartTLS, verdict, fixes)); copyLabel.textContent = "Copied"; }
+      try { await navigator.clipboard.writeText(summaryText(a, host, viaStartTLS, verdict, fixes, keyLabel)); copyLabel.textContent = "Copied"; }
       catch { copyLabel.textContent = "Copy failed"; }
       setTimeout(() => { copyLabel.textContent = "Copy summary"; }, 1600);
     } }, icon("copy"), copyLabel);
@@ -371,8 +403,9 @@
         : h("p", { style: "margin:8px 0 0" }, "Every test passed. Nothing needs to change."));
   }
 
-  function summaryText(a, host, viaStartTLS, verdict, fixes) {
+  function summaryText(a, host, viaStartTLS, verdict, fixes, keyLabel) {
     const lines = [`CA Chain Check: ${host}`, `Verdict: ${verdict}`];
+    if (keyLabel) lines.splice(1, 0, `Certificate: ${keyLabel}`);
     if (viaStartTLS) lines.splice(1, 0, `Connection: STARTTLS (${protoName(viaStartTLS)})`);
     if (fixes.length) {
       lines.push("", "Fixes:");

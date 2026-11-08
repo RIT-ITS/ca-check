@@ -64,6 +64,9 @@
         <li><strong>Off:</strong> <code>"starttls": "none"</code> uses TLS only, even on the ports above.</li>
       </ul>
       <p>When STARTTLS was used, the result for that IP has <code>tls.starttls</code> set to the protocol name.</p>
+
+      <h3>RSA and ECDSA certificates</h3>
+      <p>Many servers have both an RSA and an ECDSA certificate. After the normal handshake, the check asks each IP for the other key type with a TLS 1.2 handshake. If the server has it, that chain is in <code>results[].alternate</code>, with its own <code>tls</code>, <code>analysis</code> and <code>overall</code>, and <code>results[].overall</code> is the worse of the two. Otherwise <code>results[].keyTypeNote</code> says why, for example that the server has only one certificate or only allows TLS 1.3. <code>results[].keyType</code> is the main leaf's key type.</p>
       <pre class="code"><code>curl -s <span data-origin>https://this-server</span>/api/check \
   -H 'Content-Type: application/json' \
   -d '{"host": "smtp.example.edu", "port": 587}'</code></pre>
