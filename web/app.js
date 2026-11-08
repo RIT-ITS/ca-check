@@ -63,11 +63,11 @@
   const EXPECTED = {
     mozilla_root: "At least one path ends at a root in the trust store",
     order: "Leaf first, each certificate followed by its issuer",
-    validity: "Every certificate on the path is inside its validity period",
+    validity: "Every certificate on the path is currently valid",
     extra_certs: "Only the leaf and the intermediates it needs",
-    root_sent: "Root omitted (clients already hold it)",
+    root_sent: "Root not sent (clients already have it)",
     pending_distrust: "No CA on the path is scheduled to lose trust",
-    hostname: "Leaf certificate covers the requested host",
+    hostname: "Leaf certificate covers the hostname",
   };
 
   // ---------- config ----------
@@ -159,7 +159,7 @@
     };
     results.replaceChildren(h("div", { class: "sheet intro" },
       h("h1", {}, "Check the certificate chain a server sends"),
-      h("p", {}, "Enter a host above. CA Chain Check connects with SNI, accepts whatever chain is presented without trusting it, and reports on each test below, with the fix for anything that fails. Every IP behind the name is tested separately."),
+      h("p", {}, "Enter a host above. CA Chain Check connects to it (with SNI), reads the certificate chain it sends without trusting it, and runs the tests below. Anything that fails comes with a fix. Each IP address behind the name is tested on its own."),
       h("table", { class: "results" },
         h("thead", {}, h("tr", {}, h("th", { scope: "col" }, "Test"), h("th", { scope: "col" }, "Expected"))),
         h("tbody", {}, rows.map(([id, exp]) => h("tr", {},
@@ -271,7 +271,7 @@
 
     const mr = checks.mozilla_root;
     if (mr && mr.status === "fail") {
-      if (/self-signed root/.test(mr.detail)) add("fail", "Replace the certificate with one issued under a publicly trusted CA, or distribute your private root to every client that must connect.");
+      if (/self-signed root/.test(mr.detail)) add("fail", "Get a certificate from a publicly trusted CA, or install your private root on every client that connects.");
       else add("fail", "Configure the server to send the missing intermediate certificate after the leaf.", mr.items);
     }
     const ord = checks.order;
@@ -288,7 +288,7 @@
     const ex = checks.extra_certs;
     if (ex && ex.status !== "pass") add(ex.status, "Remove these certificates from the chain file:", ex.items);
     const pd = checks.pending_distrust;
-    if (pd && pd.status !== "pass") add(pd.status, "Move to a certificate from a CA hierarchy that is not losing trust:", pd.items);
+    if (pd && pd.status !== "pass") add(pd.status, "Switch to a certificate whose chain doesn't include these CAs:", pd.items);
     const hn = checks.hostname;
     if (hn && hn.status === "fail") add("fail", `Reissue the certificate with ${host} in its subject alternative names.`);
     const rs = checks.root_sent;
@@ -505,7 +505,7 @@
         return h("tr", {}, h("td", {}, flagWord(st, word)), h("td", { class: "route" }, parts), h("td", {}, h("span", { class: "c-flags" }, notes)));
       })));
     const el = h("section", { "aria-labelledby": "paths-h" },
-      h("h2", { class: "sec", id: "paths-h" }, "Paths", h("small", {}, `${a.paths.length} found, every issuer including cross-signs. The diagram reads from roots at the top down to the leaf.`)),
+      h("h2", { class: "sec", id: "paths-h" }, "Paths", h("small", {}, `${a.paths.length} found, including cross-signs. Roots are at the top, the leaf at the bottom.`)),
       fig, table);
     return {
       el,
@@ -536,8 +536,8 @@
   // What each diagram style means. The server sends only the styles this
   // diagram uses, with their colours, so the key always matches the drawing.
   const KEY_TEXT = {
-    trusted: ["On a trusted path", "Sent by the server and part of a path that reaches a trusted root."],
-    store: ["Trusted root, not sent", "From the trust store. Servers normally leave the root out, so this is fine."],
+    trusted: ["On a trusted path", "Sent by the server, on a path to a trusted root."],
+    store: ["Trusted root, not sent", "From the trust store. Servers usually don't send the root, so this is normal."],
     other: ["Not on a trusted path", "Sent by the server, but no path from it reaches a trusted root."],
     pending: ["Pending distrust", "Scheduled to lose trust. Plan to replace it."],
     alternate: ["Not needed", "Only on a path that doesn't reach a trusted root. It may be an old cross-sign kept for older clients."],
@@ -545,7 +545,7 @@
     unrelated: ["Unrelated", "Not on any path from this site's certificate. Remove it."],
     missing: ["Missing issuer", "Not sent by the server and not in the trust store, so the path stops here. Its arrow is dashed."],
     link: ["Issued", "Points from the issuer down to the certificate it signed."],
-    "trusted-link": ["Trusted link", "Part of a path that reaches a trusted root."],
+    "trusted-link": ["Trusted link", "On a path to a trusted root."],
   };
   function diagramKey(entries) {
     const items = (entries || []).filter((e) => KEY_TEXT[e.id]).map((e) => {

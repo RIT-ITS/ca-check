@@ -130,7 +130,7 @@ func Analyze(presented []*x509.Certificate, o Options) *Result {
 		a.ids[fp] = ci.ID
 	}
 	if len(presented) == 0 {
-		res.Checks = []Check{{ID: "chain", Title: "Certificate chain", Status: Fail, Detail: "The server presented no certificates."}}
+		res.Checks = []Check{{ID: "chain", Title: "Certificate chain", Status: Fail, Detail: "The server sent no certificates."}}
 		res.Overall = Fail
 		return res
 	}
@@ -382,7 +382,7 @@ func (a *analyzer) checks(res *Result) []Check {
 			case terms[TermUntrustedRoot] > 0:
 				c.Detail = "The chain ends at a self-signed root that is not in the trust store."
 			default:
-				c.Detail = "No issuer could be found for the top of the chain (incomplete chain — a required intermediate is probably missing)."
+				c.Detail = "The chain stops before it reaches a root. The server is probably missing an intermediate certificate."
 			}
 			for _, p := range a.paths {
 				if p.MissingIssuer != "" {
@@ -398,7 +398,7 @@ func (a *analyzer) checks(res *Result) []Check {
 		c := Check{ID: "order", Title: "Certificates in correct order"}
 		if leaf.IsCA {
 			c.Status = Warn
-			c.Detail = "The first certificate is a CA certificate; the server's end-entity certificate must be sent first."
+			c.Detail = "The first certificate is a CA certificate. The server must send its own (leaf) certificate first."
 		}
 		if best != nil {
 			// The presented certs on the best path must appear at the front, in path order.
@@ -437,7 +437,7 @@ func (a *analyzer) checks(res *Result) []Check {
 				c.Detail = "Each certificate is immediately followed by its issuer."
 			} else if !ok {
 				c.Status = Fail
-				c.Detail = "The certificates are not sent in issuance order. Expected order:"
+				c.Detail = "The certificates are out of order. Correct order:"
 				for _, id := range want {
 					ci := a.info(id)
 					c.Items = append(c.Items, fmt.Sprintf("%s (currently position #%d)", ci.SubjectCN, ci.Index))
@@ -486,7 +486,7 @@ func (a *analyzer) checks(res *Result) []Check {
 		case Pass:
 			c.Detail = "Every certificate is currently valid."
 		case Warn:
-			c.Detail = "Some certificates expire soon or are out of date off the best path."
+			c.Detail = "Some certificates expire soon, or are out of date but not on the best path."
 		case Fail:
 			c.Detail = "A certificate needed by the chain is expired or not yet valid."
 		}
@@ -495,25 +495,25 @@ func (a *analyzer) checks(res *Result) []Check {
 
 	// 4. Extra CAs
 	{
-		c := Check{ID: "extra_certs", Title: "No unnecessary certificates", Status: Pass, Detail: "Every certificate sent is used by the trusted path."}
+		c := Check{ID: "extra_certs", Title: "No unnecessary certificates", Status: Pass, Detail: "Every certificate sent is on the trusted path."}
 		if countTrusted(a.paths) == 0 {
-			c.Detail = "Every certificate sent is on the leaf's issuance path."
+			c.Detail = "Every certificate sent is on the leaf's path."
 		}
 		for _, ci := range res.Chain {
 			switch ci.Extraneous {
 			case "unrelated":
 				c.Status = Worst(c.Status, Fail)
-				c.Items = append(c.Items, fmt.Sprintf("%s — not related to the leaf's issuance path", label(ci)))
+				c.Items = append(c.Items, fmt.Sprintf("%s — not on the leaf's path", label(ci)))
 			case "duplicate":
 				c.Status = Worst(c.Status, Warn)
 				c.Items = append(c.Items, fmt.Sprintf("%s — duplicate of position #%d", label(ci), ci.DuplicateOf))
 			case "alternate_path":
 				c.Status = Worst(c.Status, Warn)
-				c.Items = append(c.Items, fmt.Sprintf("%s — only on a path that does not reach the trust store (cross-sign for older clients?)", label(ci)))
+				c.Items = append(c.Items, fmt.Sprintf("%s — only on a path that doesn't reach the trust store (maybe a cross-sign for older clients)", label(ci)))
 			}
 		}
 		if c.Status != Pass {
-			c.Detail = "The server sends certificates that are not needed to reach a trusted root."
+			c.Detail = "The server sends certificates that aren't needed to reach a trusted root."
 		}
 		out = append(out, c)
 	}
@@ -522,7 +522,7 @@ func (a *analyzer) checks(res *Result) []Check {
 	for _, ci := range res.Chain {
 		if ci.Index > 0 && ci.SelfSigned && ci.Extraneous == "" {
 			out = append(out, Check{ID: "root_sent", Title: "Root certificate sent", Status: Info,
-				Detail: "The server sends its self-signed root. Clients already have trusted roots, so this only wastes bytes in the handshake.",
+				Detail: "The server sends its root. Clients only trust roots they already have, so sending it adds bytes to the handshake without helping.",
 				Items:  []string{label(ci)}})
 			break
 		}
@@ -530,7 +530,7 @@ func (a *analyzer) checks(res *Result) []Check {
 
 	// 6. Pending distrust
 	{
-		c := Check{ID: "pending_distrust", Title: "No CAs pending loss of trust", Status: Pass, Detail: "No certificate on a trusted path is flagged."}
+		c := Check{ID: "pending_distrust", Title: "No CAs pending loss of trust", Status: Pass, Detail: "No certificate on a trusted path is scheduled to lose trust."}
 		trustedPaths, pendingPaths := 0, 0
 		flagged := map[string]bool{}
 		for _, p := range a.paths {
@@ -559,9 +559,9 @@ func (a *analyzer) checks(res *Result) []Check {
 		if pendingPaths > 0 {
 			c.Status = Warn
 			if pendingPaths == trustedPaths {
-				c.Detail = "Every trusted path goes through a CA that is scheduled to lose trust. Plan a migration to another CA hierarchy."
+				c.Detail = "Every trusted path goes through a CA that is scheduled to lose trust. Switch to a certificate from a different CA."
 			} else {
-				c.Detail = fmt.Sprintf("%d of %d trusted path(s) go through a CA scheduled to lose trust; other paths are unaffected.", pendingPaths, trustedPaths)
+				c.Detail = fmt.Sprintf("%d of %d trusted path(s) go through a CA scheduled to lose trust. The other paths are fine.", pendingPaths, trustedPaths)
 			}
 		}
 		out = append(out, c)

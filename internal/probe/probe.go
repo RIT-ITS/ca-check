@@ -272,11 +272,11 @@ func (p *Prober) Plan(ctx context.Context, client netip.Addr, req *Request) (hos
 		return
 	}
 	if len(p.Cfg.AllowedPorts) > 0 && !p.Cfg.AllowedPorts[req.Port] {
-		err = inputErr("port %d is not permitted on this server", req.Port)
+		err = inputErr("port %d is not allowed on this server", req.Port)
 		return
 	}
 	if len(req.ConnectIPs) > p.Cfg.MaxIPsPerHost {
-		err = inputErr("at most %d connect IPs may be given", p.Cfg.MaxIPsPerHost)
+		err = inputErr("enter at most %d connect IPs", p.Cfg.MaxIPsPerHost)
 		return
 	}
 	all, source, err := p.resolve(ctx, client, host, req.ConnectIPs)
@@ -440,13 +440,13 @@ func consistency(results []IPResult) Consistency {
 	}
 	switch {
 	case len(keys) == 0:
-		c.Status, c.Detail = analyze.Info, "No chains were retrieved."
+		c.Status, c.Detail = analyze.Info, "No chains to compare."
 	case len(keys) == 1 && len(groups[keys[0]]) == 1:
 		c.Status, c.Detail = analyze.Info, "Only one IP was tested."
 	case len(keys) == 1:
 		c.Status, c.Detail = analyze.Pass, identicalDetail(len(groups[keys[0]]))
 	default:
-		c.Status, c.Detail = analyze.Warn, fmt.Sprintf("Tested IPs serve %d different chains — check for a misconfigured node behind the load balancer.", len(keys))
+		c.Status, c.Detail = analyze.Warn, fmt.Sprintf("The IPs serve %d different chains. Check for a server behind the load balancer that is set up differently.", len(keys))
 	}
 	return c
 }
