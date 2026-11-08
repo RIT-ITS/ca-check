@@ -81,6 +81,9 @@ type Result struct {
 	Checks     []Check    `json:"checks"`
 	Overall    string     `json:"overall"`
 	Mermaid    string     `json:"mermaid"`
+	// DiagramKey lists, in display order, only the node and link styles the
+	// diagram actually uses, with the colours it draws them in.
+	DiagramKey []KeyEntry `json:"diagramKey"`
 }
 
 type node struct {
@@ -143,7 +146,7 @@ func Analyze(presented []*x509.Certificate, o Options) *Result {
 	if res.Overall == "" {
 		res.Overall = Pass
 	}
-	res.Mermaid = a.mermaid(res)
+	res.Mermaid, res.DiagramKey = a.mermaid(res)
 	return res
 }
 
@@ -603,8 +606,45 @@ func mermaidEscape(s string) string {
 	return r.Replace(s)
 }
 
-func (a *analyzer) mermaid(res *Result) string {
+// KeyEntry describes one style in the paths diagram so the UI can draw a
+// key that matches it exactly.
+type KeyEntry struct {
+	ID     string  `json:"id"`   // e.g. "trusted", "missing", "trusted-link"
+	Kind   string  `json:"kind"` // "node" or "link"
+	Fill   string  `json:"fill,omitempty"`
+	Stroke string  `json:"stroke"`
+	Text   string  `json:"text,omitempty"`
+	Width  float64 `json:"width"`
+	Dashed bool    `json:"dashed,omitempty"`
+}
+
+// diagramStyles is the single source of the diagram's colours. Each key
+// entry names the Mermaid class it is drawn with; several entries can share
+// a class (for example expired and unrelated certificates).
+var diagramStyles = []struct {
+	KeyEntry
+	class string
+}{
+	{KeyEntry{ID: "trusted", Kind: "node", Fill: "#e9f3ec", Stroke: "#2c6a3d", Text: "#16202b", Width: 1.5}, "trusted"},
+	{KeyEntry{ID: "store", Kind: "node", Fill: "#e9f3ec", Stroke: "#2c6a3d", Text: "#16202b", Width: 1.5, Dashed: true}, "store"},
+	{KeyEntry{ID: "other", Kind: "node", Fill: "#f3f5f7", Stroke: "#7d8a99", Text: "#16202b", Width: 1.5}, "cert"},
+	{KeyEntry{ID: "pending", Kind: "node", Fill: "#fbf3e0", Stroke: "#8a5a00", Text: "#16202b", Width: 1.5}, "warn"},
+	{KeyEntry{ID: "alternate", Kind: "node", Fill: "#fbf3e0", Stroke: "#8a5a00", Text: "#16202b", Width: 1.5}, "warn"},
+	{KeyEntry{ID: "invalid", Kind: "node", Fill: "#fbeceb", Stroke: "#b3261e", Text: "#16202b", Width: 1.5}, "bad"},
+	{KeyEntry{ID: "unrelated", Kind: "node", Fill: "#fbeceb", Stroke: "#b3261e", Text: "#16202b", Width: 1.5}, "bad"},
+	{KeyEntry{ID: "missing", Kind: "node", Fill: "transparent", Stroke: "#b3261e", Text: "#b3261e", Width: 1.5, Dashed: true}, "missing"},
+	{KeyEntry{ID: "link", Kind: "link", Stroke: "#7d8a99", Width: 1.5}, ""},
+	{KeyEntry{ID: "trusted-link", Kind: "link", Stroke: "#2c6a3d", Width: 2.5}, ""},
+	{KeyEntry{ID: "missing-link", Kind: "link", Stroke: "#7d8a99", Width: 1.5, Dashed: true}, ""},
+}
+
+func (a *analyzer) mermaid(res *Result) (string, []KeyEntry) {
 	var b strings.Builder
+	used := map[string]bool{}
+	classOf := map[string]string{}
+	for _, st := range diagramStyles {
+		classOf[st.ID] = st.class
+	}
 	// Roots at the top, the leaf at the bottom: edges run issuer → subject.
 	b.WriteString("flowchart TD\n")
 	all := append([]CertInfo{}, res.Chain...)
@@ -637,18 +677,23 @@ func (a *analyzer) mermaid(res *Result) string {
 		}
 		fmt.Fprintf(&b, "  %s[\"%s<br/><small>%s · %s…</small>%s\"]\n",
 			ci.ID, mermaidEscape(ci.SubjectCN), where, ci.SHA256[:12], extra)
-		cls := "cert"
+		key := "other"
 		switch {
-		case ci.Status == StatusExpired || ci.Status == StatusNotYetValid || ci.Extraneous == "unrelated":
-			cls = "bad"
-		case ci.PendingDistrust != nil || ci.Extraneous == "alternate_path":
-			cls = "warn"
+		case ci.Status == StatusExpired || ci.Status == StatusNotYetValid:
+			key = "invalid"
+		case ci.Extraneous == "unrelated":
+			key = "unrelated"
+		case ci.PendingDistrust != nil:
+			key = "pending"
+		case ci.Extraneous == "alternate_path":
+			key = "alternate"
 		case ci.Index < 0:
-			cls = "store"
+			key = "store"
 		case ci.OnTrustedPath:
-			cls = "trusted"
+			key = "trusted"
 		}
-		fmt.Fprintf(&b, "  class %s %s\n", ci.ID, cls)
+		used[key] = true
+		fmt.Fprintf(&b, "  class %s %s\n", ci.ID, classOf[key])
 	}
 
 	type edge struct{ from, to string }
@@ -670,6 +715,7 @@ func (a *analyzer) mermaid(res *Result) string {
 		if p.Terminal == TermIncomplete {
 			id := fmt.Sprintf("m%d", missing)
 			missing++
+			used["missing"] = true
 			fmt.Fprintf(&b, "  %s[\"Missing issuer:<br/>%s\"]\n  class %s missing\n", id, mermaidEscape(p.MissingIssuer), id)
 			e := edge{p.Nodes[len(p.Nodes)-1], id}
 			edges[e] = len(order)
@@ -678,21 +724,38 @@ func (a *analyzer) mermaid(res *Result) string {
 	}
 	for _, e := range order {
 		arrow := "-->"
-		if strings.HasPrefix(e.to, "m") {
+		switch {
+		case strings.HasPrefix(e.to, "m"):
 			arrow = "-.->"
+			used["missing-link"] = true
+		case trustedEdge[e]:
+			used["trusted-link"] = true
+		default:
+			used["link"] = true
 		}
 		fmt.Fprintf(&b, "  %s %s|issued| %s\n", e.to, arrow, e.from)
 	}
-	for i, e := range order {
-		if trustedEdge[e] {
-			fmt.Fprintf(&b, "  linkStyle %d stroke:#2c6a3d,stroke-width:2.5px\n", i)
+	var key []KeyEntry
+	classDone := map[string]bool{}
+	for _, st := range diagramStyles {
+		if st.ID == "trusted-link" {
+			for i, e := range order {
+				if trustedEdge[e] {
+					fmt.Fprintf(&b, "  linkStyle %d stroke:%s,stroke-width:%gpx\n", i, st.Stroke, st.Width)
+				}
+			}
+		}
+		if st.class != "" && !classDone[st.class] {
+			classDone[st.class] = true
+			fmt.Fprintf(&b, "  classDef %s fill:%s,stroke:%s,color:%s", st.class, st.Fill, st.Stroke, st.Text)
+			if st.Dashed {
+				b.WriteString(",stroke-dasharray:5 4")
+			}
+			b.WriteString("\n")
+		}
+		if used[st.ID] {
+			key = append(key, st.KeyEntry)
 		}
 	}
-	b.WriteString("  classDef cert fill:#f3f5f7,stroke:#7d8a99,color:#16202b\n")
-	b.WriteString("  classDef trusted fill:#e9f3ec,stroke:#2c6a3d,color:#16202b\n")
-	b.WriteString("  classDef store fill:#e9f3ec,stroke:#2c6a3d,color:#16202b,stroke-dasharray:5 4\n")
-	b.WriteString("  classDef warn fill:#fbf3e0,stroke:#8a5a00,color:#16202b\n")
-	b.WriteString("  classDef bad fill:#fbeceb,stroke:#b3261e,color:#16202b\n")
-	b.WriteString("  classDef missing fill:transparent,stroke:#b3261e,color:#b3261e,stroke-dasharray:5 4\n")
-	return b.String()
+	return b.String(), key
 }

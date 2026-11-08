@@ -258,9 +258,13 @@ pre.pem {
 /* Paths figure: a light plate in both themes so diagram colours stay true */
 figure.plate { margin: 0; background: var(--plate); color: var(--plate-ink); border: 1px solid var(--rule); border-radius: 3px; padding: var(--s4); overflow-x: auto; text-align: center; }
 figure.plate svg { max-width: 100%; height: auto; }
-figure.plate figcaption { text-align: left; font-size: var(--fs-xs); color: var(--plate-muted); margin-top: var(--s3); display: flex; flex-wrap: wrap; gap: var(--s1) var(--s4); }
-.key { display: inline-flex; gap: 6px; align-items: center; }
-.key i { width: 14px; height: 10px; border: 1.5px solid; border-radius: 2px; display: inline-block; }
+figure.plate figcaption { text-align: left; margin-top: var(--s4); padding-top: var(--s3); border-top: 1px solid color-mix(in srgb, var(--plate-ink) 15%, transparent); }
+figure.plate figcaption h3 { margin: 0 0 var(--s2); font-size: var(--fs-xs); font-weight: 700; color: var(--plate-ink); text-transform: uppercase; letter-spacing: 0.06em; }
+.key { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: var(--s3) var(--s5); }
+.key li { display: flex; gap: var(--s3); align-items: flex-start; }
+.key svg { width: 36px; height: 22px; flex: none; }
+.key b { display: block; font-size: var(--fs-sm); color: var(--plate-ink); }
+.key b + span { display: block; font-size: var(--fs-xs); color: var(--plate-muted); line-height: 1.4; }
 table.paths { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); margin-top: var(--s3); }
 .paths th { text-align: left; font-size: var(--fs-xs); color: var(--muted); padding: var(--s2) var(--s3); border-bottom: 1px solid var(--rule-strong); }
 .paths td { padding: var(--s2) var(--s3); border-bottom: 1px solid var(--rule); vertical-align: top; }

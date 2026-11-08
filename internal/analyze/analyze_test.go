@@ -62,6 +62,19 @@ func TestCorrectChain(t *testing.T) {
 	if !strings.Contains(r.Mermaid, "c1 -->|issued| c0") || !strings.Contains(r.Mermaid, "r0 -->|issued| c1") {
 		t.Errorf("mermaid missing edges:\n%s", r.Mermaid)
 	}
+	wantKey(t, r, "trusted", "store", "trusted-link")
+}
+
+// wantKey checks the diagram key lists exactly the styles in use, in order.
+func wantKey(t *testing.T, r *Result, ids ...string) {
+	t.Helper()
+	var got []string
+	for _, k := range r.DiagramKey {
+		got = append(got, k.ID)
+	}
+	if strings.Join(got, ",") != strings.Join(ids, ",") {
+		t.Errorf("diagram key %v, want %v", got, ids)
+	}
 }
 
 func TestOutOfOrder(t *testing.T) {
@@ -140,6 +153,7 @@ func TestIncompleteChain(t *testing.T) {
 	if !strings.Contains(r.Mermaid, "Missing issuer") {
 		t.Error("mermaid should show missing issuer")
 	}
+	wantKey(t, r, "other", "missing", "missing-link")
 }
 
 func TestUntrustedRoot(t *testing.T) {

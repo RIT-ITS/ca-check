@@ -485,11 +485,7 @@
 
   // ---------- paths ----------
   function pathsSection(a, byId) {
-    const fig = h("figure", { class: "plate" }, h("div", { class: "diagram" }, "Drawing paths…"),
-      h("figcaption", {},
-        key("#2c6a3d", "#e9f3ec", "On a trusted path"), key("#2c6a3d", "#e9f3ec", "Trusted root, not sent", true),
-        key("#8a5a00", "#fbf3e0", "Pending distrust or alternate path"), key("#b3261e", "#fbeceb", "Expired or unrelated"),
-        key("#7d8a99", "#f3f5f7", "Other")));
+    const fig = h("figure", { class: "plate" }, h("div", { class: "diagram" }, "Drawing paths…"), diagramKey(a.diagramKey));
     const TERM = { mozilla_root: ["pass", "Trusted root"], untrusted_root: ["fail", "Untrusted root"], incomplete: ["fail", "Incomplete"] };
     const table = h("table", { class: "paths" },
       h("thead", {}, h("tr", {}, h("th", { scope: "col" }, "Ends at"), h("th", { scope: "col" }, "Route"), h("th", { scope: "col" }, "Notes"))),
@@ -537,9 +533,47 @@
   }
 
   function flagWord(st, word) { return h("span", { class: `flag ${st}` }, icon(st), word); }
-  function key(stroke, fill, text, dashed) {
-    const i = h("i", { style: `border-color:${stroke};background:${fill};${dashed ? "border-style:dashed;" : ""}` });
-    return h("span", { class: "key" }, i, text);
+  // What each diagram style means. The server sends only the styles this
+  // diagram uses, with their colours, so the key always matches the drawing.
+  const KEY_TEXT = {
+    trusted: ["Trusted path", "Sent by the server and part of a path that reaches a trusted root."],
+    store: ["Trusted root, not sent", "From the trust list. Servers normally leave the root out, so this is fine."],
+    other: ["Not on a trusted path", "Sent by the server, but no path from it reaches a trusted root."],
+    pending: ["Pending distrust", "Scheduled to lose trust. Plan to replace it."],
+    alternate: ["Not needed", "Only on a path that doesn't reach a trusted root. Usually an old cross-sign kept for older clients."],
+    invalid: ["Expired or not yet valid", "Outside its validity dates, so clients reject it."],
+    unrelated: ["Unrelated", "Not on any path from this site's certificate. Remove it."],
+    missing: ["Missing issuer", "Not sent by the server and not in the trust list, so the path stops here. Its arrow is dashed."],
+    link: ["Issued", "Points from the issuer down to the certificate it signed."],
+    "trusted-link": ["Trusted link", "Part of a path that reaches a trusted root."],
+  };
+  function diagramKey(entries) {
+    const items = (entries || []).filter((e) => KEY_TEXT[e.id]).map((e) => {
+      const [name, desc] = KEY_TEXT[e.id];
+      return h("li", {}, keySwatch(e), h("span", {}, h("b", {}, name), h("span", {}, desc)));
+    });
+    if (!items.length) return null;
+    return h("figcaption", {}, h("h3", {}, "Key"), h("ul", { class: "key" }, items));
+  }
+  function keySwatch(e) {
+    const s = document.createElementNS(NS, "svg");
+    s.setAttribute("viewBox", "0 0 36 22");
+    s.setAttribute("aria-hidden", "true");
+    const el = (tag, attrs) => {
+      const n = document.createElementNS(NS, tag);
+      for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+      s.append(n);
+    };
+    const dash = e.dashed ? { "stroke-dasharray": "4 3" } : {};
+    if (e.kind === "link") {
+      // A short vertical arrow, matching the diagram's top-down links.
+      el("line", { x1: 18, y1: 2, x2: 18, y2: 15, stroke: e.stroke, "stroke-width": e.width, ...dash });
+      el("path", { d: "M13 14l5 6 5-6z", fill: e.stroke });
+    } else {
+      el("rect", { x: 1, y: 2, width: 34, height: 18, rx: 2, fill: e.fill, stroke: e.stroke, "stroke-width": e.width, ...dash });
+      el("path", { d: "M8 9h20M11 14h14", stroke: e.text, "stroke-width": 1.5, "stroke-linecap": "round", opacity: 0.55 });
+    }
+    return s;
   }
 
   // ---------- boot ----------
