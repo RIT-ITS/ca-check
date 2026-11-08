@@ -299,7 +299,7 @@ table.paths { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); m
 .doc-brand .brand-name { color: inherit; text-decoration: none; }
 .doc-brand .brand-name:hover { text-decoration: underline; text-decoration-color: var(--bar-edge); }
 .doc { padding: var(--s5); margin: var(--s5) 0; max-width: 46rem; }
-.doc h1 { font-size: var(--fs-xl); margin: 0 0 var(--s2); letter-spacing: -0.01em; }
+.doc h1 { font-size: var(--fs-2xl); margin: 0 0 var(--s2); letter-spacing: -0.01em; }
 .doc h2 { font-size: var(--fs-lg); margin: var(--s6) 0 var(--s2); padding-top: var(--s4); border-top: 1px solid var(--rule); }
 .doc h3 { font-size: var(--fs-md); margin: var(--s5) 0 var(--s2); }
 .doc p, .doc li { max-width: 62ch; }
