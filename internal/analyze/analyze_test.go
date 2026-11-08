@@ -224,4 +224,19 @@ func TestMermaidEscape(t *testing.T) {
 	if strings.ContainsAny(got, `"<>[]`) {
 		t.Errorf("unescaped: %s", got)
 	}
+	// Mermaid's label markdown must not see links, lists or headings.
+	for _, in := range []string{"www.washington.edu", "https://example.com", "ca@example.com", "1. Root", "# Root"} {
+		got := mermaidEscape(in)
+		if !strings.HasPrefix(got, wordJoiner) {
+			t.Errorf("%q: no leading word joiner: %q", in, got)
+		}
+		for _, bad := range []string{"www.", "s://", "a@e", "1."} {
+			if strings.Contains(got, bad) {
+				t.Errorf("%q: %q survives escaping: %q", in, bad, got)
+			}
+		}
+		if strings.ReplaceAll(got, wordJoiner, "") != in {
+			t.Errorf("%q: visible text changed: %q", in, got)
+		}
+	}
 }

@@ -183,7 +183,7 @@
         cons.detail && list.length > 1 ? `. ${cons.detail}` : "."),
       h("dl", { class: "meta" },
         metaItem("Checked", fmtDateTime(data.checkedAt)),
-        metaItem("Trust store", data.trustStore ? `${data.trustStore.count} roots` : "—"),
+        metaItem("Trust store", data.trustStore ? `${data.trustStore.count} roots` : "unknown"),
         first.tls ? metaItem("SNI", first.tls.sni || "none (IP literal)", true, true) : null,
         list.length > 1 ? metaItem("Across IPs", cons.status === "warn" ? "Different chains" : cons.status === "pass" ? "Identical chains" : "Not comparable") : null));
     sheet.append(head);
@@ -281,7 +281,9 @@
       // Certificates off the best path are covered by the "remove" fix, not renewal.
       const onPath = (val.items || []).filter((it) => !/not on the best path/.test(it));
       const exItems = (checks.extra_certs && checks.extra_certs.items) || [];
-      const offPath = (val.items || []).filter((it) => /not on the best path/.test(it) && !exItems.some((e) => e.split(" — ")[0] === it.split(" — ")[0]));
+      // Items read "<certificate>: <problem>"; the problem text never contains ": ".
+      const certOf = (s) => s.slice(0, s.lastIndexOf(": "));
+      const offPath = (val.items || []).filter((it) => /not on the best path/.test(it) && !exItems.some((e) => certOf(e) === certOf(it)));
       const items = [...onPath, ...offPath];
       if (items.length) add(onPath.length ? val.status : "warn", val.status === "fail" && onPath.length ? "Renew or replace the out-of-date certificate:" : "Plan renewal:", items);
     }
@@ -472,7 +474,7 @@
 
     return h("details", { class: "cert" },
       h("summary", {},
-        h("span", { class: "c-pos" }, c.index >= 0 ? `#${c.index}` : "—"),
+        h("span", { class: "c-pos", title: c.index >= 0 ? null : "Not sent by the server" }, c.index >= 0 ? `#${c.index}` : "n/a"),
         h("span", { class: "c-subj" }, c.subjectCN),
         h("span", { class: "c-iss" }, h("span", { class: "sr" }, "Issued by "), c.issuerCN),
         h("span", { class: `c-exp ${expCls}` }, h("span", { class: "sr" }, "Expires "), h("b", {}, fmtDate(c.notAfter))),

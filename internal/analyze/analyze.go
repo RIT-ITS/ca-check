@@ -472,14 +472,14 @@ func (a *analyzer) checks(res *Result) []Check {
 				}
 				if critical {
 					c.Status = Worst(c.Status, Fail)
-					c.Items = append(c.Items, fmt.Sprintf("%s — %s", label(ci), word))
+					c.Items = append(c.Items, fmt.Sprintf("%s: %s", label(ci), word))
 				} else {
 					c.Status = Worst(c.Status, Warn)
-					c.Items = append(c.Items, fmt.Sprintf("%s — %s (not on the best path)", label(ci), word))
+					c.Items = append(c.Items, fmt.Sprintf("%s: %s (not on the best path)", label(ci), word))
 				}
 			case StatusExpiringSoon:
 				c.Status = Worst(c.Status, Warn)
-				c.Items = append(c.Items, fmt.Sprintf("%s — expires in %d day(s) (%s)", label(ci), ci.DaysRemaining, ci.NotAfter.Format("2006-01-02")))
+				c.Items = append(c.Items, fmt.Sprintf("%s: expires in %d day(s) (%s)", label(ci), ci.DaysRemaining, ci.NotAfter.Format("2006-01-02")))
 			}
 		}
 		switch c.Status {
@@ -503,13 +503,13 @@ func (a *analyzer) checks(res *Result) []Check {
 			switch ci.Extraneous {
 			case "unrelated":
 				c.Status = Worst(c.Status, Fail)
-				c.Items = append(c.Items, fmt.Sprintf("%s — not on the leaf's path", label(ci)))
+				c.Items = append(c.Items, fmt.Sprintf("%s: not on the leaf's path", label(ci)))
 			case "duplicate":
 				c.Status = Worst(c.Status, Warn)
-				c.Items = append(c.Items, fmt.Sprintf("%s — duplicate of position #%d", label(ci), ci.DuplicateOf))
+				c.Items = append(c.Items, fmt.Sprintf("%s: duplicate of position #%d", label(ci), ci.DuplicateOf))
 			case "alternate_path":
 				c.Status = Worst(c.Status, Warn)
-				c.Items = append(c.Items, fmt.Sprintf("%s — only on a path that doesn't reach the trust store (maybe a cross-sign for older clients)", label(ci)))
+				c.Items = append(c.Items, fmt.Sprintf("%s: only on a path that doesn't reach the trust store (maybe a cross-sign for older clients)", label(ci)))
 			}
 		}
 		if c.Status != Pass {
@@ -547,7 +547,7 @@ func (a *analyzer) checks(res *Result) []Check {
 					flagged[id] = true
 					item := label(*ci)
 					if ci.PendingDistrust.Date != "" {
-						item += " — distrust " + ci.PendingDistrust.Date
+						item += ": distrust " + ci.PendingDistrust.Date
 					}
 					if ci.PendingDistrust.Note != "" {
 						item += " (" + ci.PendingDistrust.Note + ")"
@@ -600,10 +600,21 @@ func appendUnique(s []string, v string) []string {
 	return append(s, v)
 }
 
+// wordJoiner (U+2060) is invisible and never a line-break point.
+const wordJoiner = "\u2060"
+
 // mermaidEscape makes a string safe inside a quoted Mermaid label.
+//
+// Mermaid runs label text through a markdown parser that supports only bold
+// and italics; anything else renders as "Unsupported markdown: link" (or
+// list, heading) instead of the text. Certificate names often look like
+// markdown: "www.example.com" and "a@b.c" autolink, "1. Root" is a list item
+// and "# Root" a heading. A word joiner before the start and before every
+// ".", "@" and ":" breaks those patterns without changing what is shown.
 func mermaidEscape(s string) string {
-	r := strings.NewReplacer(`"`, "#quot;", "<", "#lt;", ">", "#gt;", "&", "#amp;", "`", "#96;", "\n", " ", "|", "#124;", "[", "#91;", "]", "#93;", "{", "#123;", "}", "#125;")
-	return r.Replace(s)
+	r := strings.NewReplacer(`"`, "#quot;", "<", "#lt;", ">", "#gt;", "&", "#amp;", "`", "#96;", "\n", " ", "|", "#124;", "[", "#91;", "]", "#93;", "{", "#123;", "}", "#125;",
+		".", wordJoiner+".", "@", wordJoiner+"@", ":", wordJoiner+":")
+	return wordJoiner + r.Replace(s)
 }
 
 // KeyEntry describes one style in the paths diagram so the UI can draw a
