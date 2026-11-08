@@ -35,6 +35,7 @@ services:
       traefik.http.middlewares.ca-chain-check-ratelimit.ratelimit.average: ${TRAEFIK_RATELIMIT_AVERAGE:-20}
       traefik.http.middlewares.ca-chain-check-ratelimit.ratelimit.burst: ${TRAEFIK_RATELIMIT_BURST:-10}
       traefik.http.middlewares.ca-chain-check-ratelimit.ratelimit.period: 1m
+      traefik.http.middlewares.ca-chain-check-ratelimit.ratelimit.sourcecriterion.requestheadername: ${TRAEFIK_RATELIMIT_HEADER:-}
       traefik.http.services.ca-chain-check.loadbalancer.server.port: "8080"
       traefik.http.services.ca-chain-check.loadbalancer.healthcheck.path: /healthz
       traefik.http.services.ca-chain-check.loadbalancer.healthcheck.interval: 30s

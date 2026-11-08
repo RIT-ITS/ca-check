@@ -38,6 +38,7 @@ type Config struct {
 	RateLimitBurst int
 	MaxConcurrent  int
 	TrustedProxies []netip.Prefix
+	ClientIPHeader string // e.g. CF-Connecting-IP; honored only from trusted proxies
 
 	TargetDenyCIDRs          []netip.Prefix
 	PrivateTargetClientCIDRs []netip.Prefix
@@ -75,6 +76,7 @@ func LoadFrom(get func(string) string) (*Config, error) {
 	fail := func(k string, e error) error { return fmt.Errorf("config %s: %w", k, e) }
 
 	c.ListenAddr = str("LISTEN_ADDR", ":8080")
+	c.ClientIPHeader = str("CLIENT_IP_HEADER", "")
 	if c.RateLimitRPM, err = strconv.ParseFloat(str("RATE_LIMIT_RPM", "10"), 64); err != nil || c.RateLimitRPM <= 0 {
 		return nil, fail("RATE_LIMIT_RPM", fmt.Errorf("must be a positive number"))
 	}

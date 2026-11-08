@@ -10,6 +10,7 @@ data:
   RATE_LIMIT_BURST: {{ $c.rateLimitBurst | quote }}
   MAX_CONCURRENT_PROBES: {{ $c.maxConcurrentProbes | quote }}
   TRUSTED_PROXIES: {{ $c.trustedProxies | quote }}
+  CLIENT_IP_HEADER: {{ $c.clientIPHeader | quote }}
   TARGET_DENY_CIDRS: {{ $c.targetDenyCIDRs | quote }}
   PRIVATE_TARGET_CLIENT_CIDRS: {{ $c.privateTargetClientCIDRs | quote }}
   PRIVATE_TARGET_EXTRA_CIDRS: {{ $c.privateTargetExtraCIDRs | quote }}

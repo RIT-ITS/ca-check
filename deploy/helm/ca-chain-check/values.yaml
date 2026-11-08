@@ -44,6 +44,8 @@ traefik:
     average: 20
     burst: 10
     period: 1m
+    # Group by this request header instead of the client IP (e.g. CF-Connecting-IP).
+    sourceHeader: ""
 
 # Application configuration -> ConfigMap -> environment.
 config:
@@ -53,6 +55,8 @@ config:
   maxConcurrentProbes: 20
   # CIDRs whose X-Forwarded-For is trusted: set to your ingress controller pod CIDR.
   trustedProxies: "10.0.0.0/8"
+  # Header with the real client IP, honored only from trustedProxies (e.g. CF-Connecting-IP).
+  clientIPHeader: ""
 
   # Never testable, by anyone. Add the Kubernetes API service IP etc.
   targetDenyCIDRs: "0.0.0.0/8,169.254.0.0/16,224.0.0.0/4,240.0.0.0/4,255.255.255.255/32,::/128,ff00::/8,fe80::/10,fd00:ec2::254/128"

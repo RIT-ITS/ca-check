@@ -57,6 +57,7 @@ Overridden IPs still go through the target policy. To reach in-cluster services,
 - Over the limit, the API returns `429` with a `Retry-After` header.
 - `MAX_CONCURRENT_PROBES` caps the number of handshakes running at once.
 - The client IP is the rightmost `X-Forwarded-For` hop that is not one of the `TRUSTED_PROXIES`. Set that variable to your Traefik or ingress CIDR, or every request will look like it comes from the proxy.
+- If a proxy hides the real client address (for example rootless Podman with Traefik, where every request appears to come from Traefik), set `CLIENT_IP_HEADER`, for example `CF-Connecting-IP` behind a Cloudflare tunnel. It's honored only when the request comes from a `TRUSTED_PROXIES` address. `TRAEFIK_RATELIMIT_HEADER` (or `traefik.middleware.sourceHeader` in Helm) groups the Traefik limit by the same header.
 - The limit is kept in memory **per replica**. Compose and Helm can also add a Traefik `ratelimit` middleware as a shared layer in front of the app.
 
 ## Pending loss of trust

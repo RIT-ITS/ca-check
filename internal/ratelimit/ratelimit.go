@@ -107,12 +107,18 @@ func RetryAfterSeconds(d time.Duration) int {
 }
 
 // ClientIP returns the real client address. If the direct peer is a trusted
-// proxy, X-Forwarded-For is walked right-to-left and the first hop that is not
-// itself a trusted proxy is returned.
-func ClientIP(r *http.Request, trusted []netip.Prefix) netip.Addr {
+// proxy and header is set (e.g. CF-Connecting-IP) and holds a valid IP, that
+// IP is used. Otherwise X-Forwarded-For is walked right-to-left and the first
+// hop that is not itself a trusted proxy is returned.
+func ClientIP(r *http.Request, trusted []netip.Prefix, header string) netip.Addr {
 	peer := parseAddr(r.RemoteAddr)
 	if !isTrusted(peer, trusted) {
 		return peer
+	}
+	if header != "" {
+		if a := parseAddr(r.Header.Get(header)); a.IsValid() {
+			return a
+		}
 	}
 	var hops []string
 	for _, h := range r.Header.Values("X-Forwarded-For") {

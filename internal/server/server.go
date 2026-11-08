@@ -65,7 +65,7 @@ func writeErr(w http.ResponseWriter, code int, msg string) {
 }
 
 func (s *Server) config(w http.ResponseWriter, r *http.Request) {
-	client := ratelimit.ClientIP(r, s.Cfg.TrustedProxies)
+	client := ratelimit.ClientIP(r, s.Cfg.TrustedProxies, s.Cfg.ClientIPHeader)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ipOverrideAllowed": s.Guard.OverrideAllowedFor(client),
 		"maxIPsPerHost":     s.Cfg.MaxIPsPerHost,
@@ -79,7 +79,7 @@ func (s *Server) limited(w http.ResponseWriter, wait time.Duration) {
 }
 
 func (s *Server) check(w http.ResponseWriter, r *http.Request) {
-	client := ratelimit.ClientIP(r, s.Cfg.TrustedProxies)
+	client := ratelimit.ClientIP(r, s.Cfg.TrustedProxies, s.Cfg.ClientIPHeader)
 	if !client.IsValid() {
 		writeErr(w, http.StatusBadRequest, "cannot determine client address")
 		return

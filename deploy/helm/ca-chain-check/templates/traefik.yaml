@@ -10,6 +10,10 @@ spec:
     average: {{ $t.middleware.average }}
     burst: {{ $t.middleware.burst }}
     period: {{ $t.middleware.period }}
+    {{- with $t.middleware.sourceHeader }}
+    sourceCriterion:
+      requestHeaderName: {{ . }}
+    {{- end }}
 ---
 {{- end }}
 {{- if $t.ingressRoute.enabled }}

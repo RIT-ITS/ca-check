@@ -28,8 +28,33 @@ func TestClientIP(t *testing.T) {
 		if c.xff != "" {
 			r.Header.Set("X-Forwarded-For", c.xff)
 		}
-		if got := ClientIP(r, trusted); got != netip.MustParseAddr(c.want) {
+		if got := ClientIP(r, trusted, ""); got != netip.MustParseAddr(c.want) {
 			t.Errorf("%s / %q: got %s want %s", c.remote, c.xff, got, c.want)
+		}
+	}
+}
+
+func TestClientIPHeader(t *testing.T) {
+	trusted, _ := config.ParseCIDRList("10.89.1.0/24")
+	cases := []struct {
+		remote, cf, xff, want string
+	}{
+		{"10.89.1.2:1", "50.1.2.3", "10.89.1.2", "50.1.2.3"}, // via trusted proxy: header wins
+		{"10.89.1.2:1", "", "10.89.1.2", "10.89.1.2"},        // header absent: fall back to XFF
+		{"10.89.1.2:1", "garbage", "", "10.89.1.2"},          // invalid header ignored
+		{"203.0.113.9:1", "50.1.2.3", "", "203.0.113.9"},     // untrusted peer cannot spoof
+	}
+	for _, c := range cases {
+		r := httptest.NewRequest("GET", "/", nil)
+		r.RemoteAddr = c.remote
+		if c.cf != "" {
+			r.Header.Set("CF-Connecting-IP", c.cf)
+		}
+		if c.xff != "" {
+			r.Header.Set("X-Forwarded-For", c.xff)
+		}
+		if got := ClientIP(r, trusted, "CF-Connecting-IP"); got != netip.MustParseAddr(c.want) {
+			t.Errorf("%+v: got %s", c, got)
 		}
 	}
 }
