@@ -21,6 +21,7 @@ import (
 	"ca-chain-check/internal/analyze"
 	"ca-chain-check/internal/config"
 	"ca-chain-check/internal/netguard"
+	"ca-chain-check/internal/revocation"
 	"ca-chain-check/internal/truststore"
 )
 
@@ -115,6 +116,8 @@ type Prober struct {
 	Resolver *net.Resolver
 	// Dial is overridable for tests; it must connect to exactly addr.
 	Dial func(ctx context.Context, network, addr string) (net.Conn, error)
+	// Revocation checks OCSP and CRLs when set.
+	Revocation *revocation.Checker
 }
 
 // NewResolver builds a resolver that uses the given servers (round-robin
@@ -356,7 +359,7 @@ func (p *Prober) Run(ctx context.Context, client netip.Addr, host string, port i
 		wg.Add(1)
 		go func(r *IPResult, ip netip.Addr) {
 			defer wg.Done()
-			p.probeOne(ctx, r, host, port, starttls, fallback, ip)
+			p.probeOne(ctx, client, r, host, port, starttls, fallback, ip)
 		}(&resp.Results[i], ip)
 	}
 	wg.Wait()
@@ -364,7 +367,7 @@ func (p *Prober) Run(ctx context.Context, client netip.Addr, host string, port i
 	return resp
 }
 
-func (p *Prober) probeOne(ctx context.Context, r *IPResult, host string, port int, starttls, fallback string, ip netip.Addr) {
+func (p *Prober) probeOne(ctx context.Context, client netip.Addr, r *IPResult, host string, port int, starttls, fallback string, ip netip.Addr) {
 	select {
 	case p.Sem <- struct{}{}:
 		defer func() { <-p.Sem }()
@@ -381,7 +384,12 @@ func (p *Prober) probeOne(ctx context.Context, r *IPResult, host string, port in
 		return
 	}
 	r.TLS = info
+	var rev func(cert, issuer *x509.Certificate) *analyze.Revocation
+	if p.Revocation != nil {
+		rev = p.Revocation.For(ctx, client)
+	}
 	r.Analysis = analyze.Analyze(certs, analyze.Options{
+		Revocation:   rev,
 		Host:         host, // VerifyHostname also handles IP-literal SANs
 		Now:          time.Now(),
 		ExpiringSoon: time.Duration(p.Cfg.ExpiringSoonDays) * 24 * time.Hour,

@@ -68,6 +68,10 @@ type CertInfo struct {
 	InMozilla       bool                    `json:"inMozilla"`
 	PendingDistrust *config.PendingDistrust `json:"pendingDistrust,omitempty"`
 
+	// Revocation is set for certificates on the best path whose issuer is
+	// known, when revocation checking is on.
+	Revocation *Revocation `json:"revocation,omitempty"`
+
 	// Set by chain analysis.
 	OnTrustedPath bool   `json:"onTrustedPath"`
 	Extraneous    string `json:"extraneous,omitempty"` // "", "unrelated", "alternate_path", "duplicate"
@@ -214,4 +218,43 @@ func describe(c *x509.Certificate, id string, index int, source string, o Option
 		ci.PendingDistrust = &pd
 	}
 	return ci
+}
+
+// Revocation is what the issuer's OCSP responder and CRL say about a
+// certificate. A source is nil when the certificate names no URL for it.
+type Revocation struct {
+	OCSP *RevocationSource `json:"ocsp,omitempty"`
+	CRL  *RevocationSource `json:"crl,omitempty"`
+}
+
+// Revocation statuses.
+const (
+	RevGood    = "good"    // checked and not revoked
+	RevRevoked = "revoked" // the issuer says it is revoked
+	RevUnknown = "unknown" // the OCSP responder does not know the certificate
+	RevError   = "error"   // could not be checked; see Error
+)
+
+// RevocationSource is one OCSP or CRL answer.
+type RevocationSource struct {
+	URL        string     `json:"url"`
+	Status     string     `json:"status"` // good | revoked | unknown | error
+	Error      string     `json:"error,omitempty"`
+	RevokedAt  *time.Time `json:"revokedAt,omitempty"`
+	Reason     string     `json:"reason,omitempty"`
+	ThisUpdate *time.Time `json:"thisUpdate,omitempty"`
+	NextUpdate *time.Time `json:"nextUpdate,omitempty"`
+}
+
+// Revoked reports whether either source says the certificate is revoked.
+func (r *Revocation) Revoked() *RevocationSource {
+	if r == nil {
+		return nil
+	}
+	for _, s := range []*RevocationSource{r.OCSP, r.CRL} {
+		if s != nil && s.Status == RevRevoked {
+			return s
+		}
+	}
+	return nil
 }

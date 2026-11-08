@@ -67,6 +67,7 @@
     extra_certs: "Only the leaf and the intermediates it needs",
     root_sent: "Root not sent (clients already have it)",
     pending_distrust: "No CA on the path is scheduled to lose trust",
+    revocation: "No certificate on the path is revoked (OCSP or CRL)",
     hostname: "Leaf certificate covers the hostname",
   };
 
@@ -157,7 +158,7 @@
     const titles = {
       mozilla_root: "Chains to a trusted root", order: "Certificates in issuance order",
       validity: "Validity periods", extra_certs: "No unnecessary certificates",
-      pending_distrust: "No CAs pending loss of trust", hostname: "Hostname match",
+      pending_distrust: "No CAs pending loss of trust", revocation: "Not revoked", hostname: "Hostname match",
     };
     results.replaceChildren(h("div", { class: "sheet intro" },
       h("h1", {}, "Check the certificate chain a server sends"),
@@ -292,6 +293,8 @@
     }
     const ex = checks.extra_certs;
     if (ex && ex.status !== "pass") add(ex.status, "Remove these certificates from the chain file:", ex.items);
+    const rv = checks.revocation;
+    if (rv && rv.status === "fail") add("fail", "Replace the revoked certificate. Clients that check revocation will reject it:", rv.items);
     const pd = checks.pending_distrust;
     if (pd && pd.status !== "pass") add(pd.status, "Switch to a certificate whose chain doesn't include these CAs:", pd.items);
     const hn = checks.hostname;
@@ -429,6 +432,22 @@
       h("span", {}, "#"), h("span", {}, "Subject"), h("span", {}, "Issued by"), h("span", {}, "Expires"), h("span", {}, "Notes"), h("span"));
   }
 
+  // ---------- revocation ----------
+  const isRevoked = (c) => !!c.revocation && [c.revocation.ocsp, c.revocation.crl].some((s) => s && s.status === "revoked");
+  function revSourceText(s) {
+    if (s.status === "good") return "not revoked";
+    if (s.status === "revoked") return `REVOKED${s.revokedAt ? ` on ${fmtDate(s.revokedAt)}` : ""}${s.reason ? ` (${s.reason})` : ""}`;
+    if (s.status === "unknown") return "responder doesn't know this certificate";
+    return `could not check (${s.error || "error"})`;
+  }
+  function revocationText(r) {
+    if (!r) return "";
+    const parts = [];
+    if (r.ocsp) parts.push(`OCSP: ${revSourceText(r.ocsp)}`);
+    if (r.crl) parts.push(`CRL: ${revSourceText(r.crl)}${r.crl.nextUpdate && r.crl.status === "good" ? `, list valid until ${fmtDate(r.crl.nextUpdate)}` : ""}`);
+    return parts.length ? parts.join(". ") : "No OCSP responder or CRL named";
+  }
+
   function certRow(c) {
     const tags = [];
     const tag = (st, text) => tags.push(h("span", { class: `tag ${st}` }, st !== "neutral" ? icon(st === "neutral" ? "info" : st) : null, text));
@@ -444,6 +463,7 @@
     if (c.extraneous === "duplicate") tag("warn", `Duplicate of #${c.duplicateOf}`);
     if (c.extraneous === "alternate_path") tag("warn", "Not needed for trust");
     if (c.pendingDistrust) tag("warn", "Pending distrust");
+    if (isRevoked(c)) tag("fail", "Revoked");
 
     const expCls = c.status === "expired" || c.status === "not_yet_valid" ? "fail" : c.status === "expiring_soon" ? "warn" : "";
     const rows = [
@@ -461,8 +481,9 @@
       ["Emails", (c.emails || []).join(", ")], ["URIs", (c.uris || []).join(", ")],
       ["Key usage", (c.keyUsage || []).join(", ")], ["Extended key usage", (c.extKeyUsage || []).join(", ")],
       ["Policies", (c.policies || []).join(", "), true],
-      ["OCSP", (c.ocspServers || []).join(", ")], ["CA issuers", (c.issuingUrls || []).join(", ")],
-      ["CRL", (c.crlDistributionPoints || []).join(", ")],
+      ["Revocation", revocationText(c.revocation)],
+      ["OCSP URL", (c.ocspServers || []).join(", ")], ["CA issuers", (c.issuingUrls || []).join(", ")],
+      ["CRL URL", (c.crlDistributionPoints || []).join(", ")],
     ];
     if (c.pendingDistrust) {
       const pd = c.pendingDistrust;
@@ -553,6 +574,7 @@
     pending: ["Pending distrust", "Scheduled to lose trust. Plan to replace it."],
     alternate: ["Not needed", "Only on a path that doesn't reach a trusted root. It may be an old cross-sign kept for older clients."],
     invalid: ["Expired or not yet valid", "Outside its validity dates, so clients reject it."],
+    revoked: ["Revoked", "Its issuer says it is revoked (OCSP or CRL). Clients that check will reject it."],
     unrelated: ["Unrelated", "Not on any path from this site's certificate. Remove it."],
     missing: ["Missing issuer", "Not sent by the server and not in the trust store, so the path stops here. Its arrow is dashed."],
     link: ["Issued", "Points from the issuer down to the certificate it signed."],

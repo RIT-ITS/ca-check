@@ -33,19 +33,21 @@ func TestOpenAPIMatchesTypes(t *testing.T) {
 		t.Fatalf("openapi.json: %v", err)
 	}
 	for schema, v := range map[string]any{
-		"CheckRequest":    probe.Request{},
-		"CheckResponse":   probe.Response{},
-		"Resolution":      probe.Resolution{},
-		"IPResult":        probe.IPResult{},
-		"TLSInfo":         probe.TLSInfo{},
-		"Consistency":     probe.Consistency{},
-		"Analysis":        analyze.Result{},
-		"Check":           analyze.Check{},
-		"Path":            analyze.Path{},
-		"Certificate":     analyze.CertInfo{},
-		"KeyEntry":        analyze.KeyEntry{},
-		"PendingDistrust": config.PendingDistrust{},
-		"TrustStoreInfo":  truststore.Info{},
+		"CheckRequest":     probe.Request{},
+		"CheckResponse":    probe.Response{},
+		"Resolution":       probe.Resolution{},
+		"IPResult":         probe.IPResult{},
+		"TLSInfo":          probe.TLSInfo{},
+		"Consistency":      probe.Consistency{},
+		"Analysis":         analyze.Result{},
+		"Check":            analyze.Check{},
+		"Path":             analyze.Path{},
+		"Certificate":      analyze.CertInfo{},
+		"KeyEntry":         analyze.KeyEntry{},
+		"PendingDistrust":  config.PendingDistrust{},
+		"Revocation":       analyze.Revocation{},
+		"RevocationSource": analyze.RevocationSource{},
+		"TrustStoreInfo":   truststore.Info{},
 	} {
 		s, ok := spec.Components.Schemas[schema]
 		if !ok {

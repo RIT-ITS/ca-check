@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"ca-chain-check/internal/config"
@@ -51,6 +52,9 @@ type Options struct {
 	ExpiringSoon time.Duration
 	Store        *truststore.Store
 	Pending      map[string]config.PendingDistrust
+	// Revocation, when set, is called for each certificate on the best path
+	// with its issuer, concurrently. It must be safe for concurrent use.
+	Revocation func(cert, issuer *x509.Certificate) *Revocation
 }
 
 // Path is one issuance path from the leaf upward.
@@ -139,6 +143,7 @@ func Analyze(presented []*x509.Certificate, o Options) *Result {
 	a.scorePaths()
 	res.Paths = a.paths
 	a.markUsage(res)
+	a.checkRevocation()
 	res.Checks = a.checks(res)
 	for _, c := range res.Checks {
 		res.Overall = Worst(res.Overall, c.Status)
@@ -567,7 +572,12 @@ func (a *analyzer) checks(res *Result) []Check {
 		out = append(out, c)
 	}
 
-	// 7. Hostname
+	// 7. Revocation
+	if a.o.Revocation != nil {
+		out = append(out, a.revocationCheck(res))
+	}
+
+	// 8. Hostname
 	if a.o.Host != "" {
 		c := Check{ID: "hostname", Title: "Leaf certificate matches hostname"}
 		leafCert := a.nodes[a.order[0]].cert
@@ -581,6 +591,98 @@ func (a *analyzer) checks(res *Result) []Check {
 		out = append(out, c)
 	}
 	return out
+}
+
+// checkRevocation asks the issuer about every certificate on the best path
+// that has a known issuer. Roots are skipped: nothing above them can revoke.
+func (a *analyzer) checkRevocation() {
+	if a.o.Revocation == nil {
+		return
+	}
+	best := a.bestPath()
+	if best == nil {
+		return
+	}
+	fpOf := map[string]string{}
+	for fp, id := range a.ids {
+		fpOf[id] = fp
+	}
+	var wg sync.WaitGroup
+	for i := 0; i+1 < len(best.Nodes); i++ {
+		child, issuer := a.nodes[fpOf[best.Nodes[i]]], a.nodes[fpOf[best.Nodes[i+1]]]
+		if child == nil || issuer == nil || child.info.SelfSigned {
+			continue
+		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			child.info.Revocation = a.o.Revocation(child.cert, issuer.cert)
+		}()
+	}
+	wg.Wait()
+}
+
+func (a *analyzer) revocationCheck(res *Result) Check {
+	c := Check{ID: "revocation", Title: "Certificates not revoked", Status: Pass}
+	checked, problems := 0, 0
+	for _, ci := range res.Chain {
+		r := ci.Revocation
+		if r == nil || ci.Extraneous == "duplicate" {
+			continue
+		}
+		checked++
+		if s := r.Revoked(); s != nil {
+			c.Status = Fail
+			item := fmt.Sprintf("%s: revoked", label(ci))
+			if s.RevokedAt != nil {
+				item += " on " + s.RevokedAt.UTC().Format("2006-01-02")
+			}
+			if s.Reason != "" {
+				item += " (" + s.Reason + ")"
+			}
+			c.Items = append(c.Items, item+", says "+sourceName(r, s))
+			continue
+		}
+		var notes []string
+		for _, s := range []struct {
+			name string
+			src  *RevocationSource
+		}{{"OCSP", r.OCSP}, {"CRL", r.CRL}} {
+			switch {
+			case s.src == nil:
+			case s.src.Status == RevError:
+				notes = append(notes, s.name+" could not be checked ("+s.src.Error+")")
+			case s.src.Status == RevUnknown:
+				notes = append(notes, s.name+" responder does not know this certificate")
+			}
+		}
+		if r.OCSP == nil && r.CRL == nil {
+			notes = append(notes, "names no OCSP responder or CRL")
+		}
+		good := (r.OCSP != nil && r.OCSP.Status == RevGood) || (r.CRL != nil && r.CRL.Status == RevGood)
+		if len(notes) > 0 && !good {
+			problems++
+			c.Items = append(c.Items, label(ci)+": "+strings.Join(notes, "; "))
+		}
+	}
+	switch {
+	case checked == 0:
+		c.Status, c.Detail = Info, "No certificate on the best path could be checked."
+	case c.Status == Fail:
+		c.Detail = "The issuer says a certificate on the best path is revoked. Clients that check will reject it."
+	case problems > 0:
+		c.Status, c.Detail = Info, "Some certificates could not be checked for revocation. None was found revoked."
+	default:
+		c.Detail = "Every certificate on the best path was checked with its issuer's OCSP responder or CRL, and none is revoked."
+	}
+	return c
+}
+
+func sourceName(r *Revocation, s *RevocationSource) string {
+	if s == r.OCSP {
+		return "OCSP"
+	}
+	return "the CRL"
 }
 
 func countTrusted(ps []Path) int {
@@ -647,6 +749,7 @@ var diagramStyles = []struct {
 	{KeyEntry{ID: "other", Kind: "node", Fill: "#f3f5f7", Stroke: "#7d8a99", Text: "#16202b", Width: 1.5}, "cert"},
 	{KeyEntry{ID: "pending", Kind: "node", Fill: "#fbf3e0", Stroke: "#8a5a00", Text: "#16202b", Width: 2, Dash: "2 3"}, "warn"},
 	{KeyEntry{ID: "alternate", Kind: "node", Fill: "#fbf3e0", Stroke: "#8a5a00", Text: "#16202b", Width: 2, Dash: "2 3"}, "warn"},
+	{KeyEntry{ID: "revoked", Kind: "node", Fill: "#fbeceb", Stroke: "#b3261e", Text: "#16202b", Width: 1.5, Hatch: true}, "bad"},
 	{KeyEntry{ID: "invalid", Kind: "node", Fill: "#fbeceb", Stroke: "#b3261e", Text: "#16202b", Width: 1.5, Hatch: true}, "bad"},
 	{KeyEntry{ID: "unrelated", Kind: "node", Fill: "#fbeceb", Stroke: "#b3261e", Text: "#16202b", Width: 1.5, Hatch: true}, "bad"},
 	{KeyEntry{ID: "missing", Kind: "node", Fill: "transparent", Stroke: "#b3261e", Text: "#b3261e", Width: 1.5, Dash: "6 4"}, "missing"},
@@ -694,8 +797,13 @@ func (a *analyzer) mermaid(res *Result) (string, []KeyEntry) {
 		if ci.Extraneous == "unrelated" {
 			extra += "<br/>unrelated"
 		}
+		if ci.Revocation.Revoked() != nil {
+			extra += "<br/>revoked"
+		}
 		key := "other"
 		switch {
+		case ci.Revocation.Revoked() != nil:
+			key = "revoked"
 		case ci.Status == StatusExpired || ci.Status == StatusNotYetValid:
 			key = "invalid"
 		case ci.Extraneous == "unrelated":

@@ -3,7 +3,7 @@
   "info": {
     "title": "CA Chain Check API",
     "version": "1.0",
-    "description": "Checks the TLS certificate chain a server sends: whether it reaches a root in the trust store, its order, validity dates, extra certificates, pending distrust and hostname. The chain is collected without trusting it, then analyzed. See also the plain-language guide at [/help](help)."
+    "description": "Checks the TLS certificate chain a server sends: whether it reaches a root in the trust store, its order, validity dates, extra certificates, pending distrust, revocation (OCSP and CRL) and hostname. The chain is collected without trusting it, then analyzed. See also the plain-language guide at [/help](help)."
   },
   "servers": [
     {
@@ -416,11 +416,12 @@
               "validity",
               "extra_certs",
               "pending_distrust",
+              "revocation",
               "hostname",
               "root_sent",
               "chain"
             ],
-            "description": "`mozilla_root`: a path ends at a root in the trust store. `chain`: only when the server sent no certificates."
+            "description": "`mozilla_root`: a path ends at a root in the trust store. `chain`: only when the server sent no certificates. `revocation`: no certificate on the best path is revoked, by OCSP or CRL."
           },
           "title": {
             "type": "string"
@@ -658,6 +659,9 @@
           },
           "pem": {
             "type": "string"
+          },
+          "revocation": {
+            "$ref": "#/components/schemas/Revocation"
           }
         }
       },
@@ -775,6 +779,55 @@
         "properties": {
           "error": {
             "type": "string"
+          }
+        }
+      },
+      "Revocation": {
+        "type": "object",
+        "description": "What the issuer's OCSP responder and CRL say. Only set for certificates on the best path whose issuer is known, when the server checks revocation. A source is missing when the certificate names no http(s) URL for it.",
+        "properties": {
+          "ocsp": {
+            "$ref": "#/components/schemas/RevocationSource"
+          },
+          "crl": {
+            "$ref": "#/components/schemas/RevocationSource"
+          }
+        }
+      },
+      "RevocationSource": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "good",
+              "revoked",
+              "unknown",
+              "error"
+            ],
+            "description": "`unknown`: the OCSP responder does not know the certificate. `error`: it could not be checked; see `error`."
+          },
+          "error": {
+            "type": "string"
+          },
+          "revokedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reason": {
+            "type": "string",
+            "example": "key compromise"
+          },
+          "thisUpdate": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "nextUpdate": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       }

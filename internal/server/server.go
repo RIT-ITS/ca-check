@@ -137,7 +137,8 @@ func (s *Server) check(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	budget := s.Cfg.DialTimeout*2 + s.Cfg.HandshakeTimeout + 5*time.Second
+	// DNS + connect, a TLS attempt and a STARTTLS retry, then OCSP/CRL fetches.
+	budget := s.Cfg.DialTimeout*3 + s.Cfg.HandshakeTimeout*2 + s.Cfg.RevocationTimeout + 5*time.Second
 	ctx, cancel := context.WithTimeout(r.Context(), budget)
 	defer cancel()
 

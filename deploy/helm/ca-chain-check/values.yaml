@@ -75,6 +75,10 @@ config:
 
   dialTimeout: 5s
   handshakeTimeout: 5s
+  # OCSP and CRL checks for the best path. Needs egress to ports 80 and 443
+  # (add 80 to networkPolicy.egressPorts if the NetworkPolicy is on).
+  checkRevocation: true
+  revocationTimeout: 5s
   expiringSoonDays: 30
 
   mozillaRootsURL: "https://ccadb.my.salesforce-sites.com/mozilla/IncludedRootsPEMTxt?TrustBitsInclude=Websites"

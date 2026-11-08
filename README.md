@@ -7,6 +7,7 @@ A small web service that connects to `host:port` with TLS and SNI, accepts whate
 - **Validity:** whether each certificate is expired, not yet valid, or expiring soon.
 - **Extra certificates:** certs unrelated to the leaf, duplicates, and cross-signs that are only on paths that do not reach the trust store.
 - **Pending distrust:** CA fingerprints you flag in config as scheduled to lose trust.
+- **Revocation:** whether the issuer's OCSP responder or CRL says a certificate on the best path is revoked. CRLs must be signed by the issuer, and out-of-date answers count as "could not check". Because the URLs come from the certificate, every fetch follows the target policy below: http or https on ports 80 and 443 only, each resolved address and each redirect checked, size and time limited. Answers are cached until the issuer's next update, for at most an hour. Turn off with `CHECK_REVOCATION=false` (Helm: `config.checkRevocation`); `REVOCATION_TIMEOUT` (default 5s) limits each fetch.
 - **Hostname:** whether the leaf certificate matches the host.
 - **Other root stores:** each CA certificate's details link to its [Cloudflare Radar](https://radar.cloudflare.com/certificate-transparency) page (`/certificate-transparency/ca/<SHA-256>`), which shows whether Chrome, Apple, Microsoft and Mozilla include it.
 - **Every chain path:** found by searching issuers by name and verified signature, including cross-signs. All paths are drawn as a Mermaid diagram.

@@ -28,6 +28,7 @@ type Opts struct {
 	Key                 crypto.Signer // reuse a key (cross-signing)
 	DNS                 []string
 	IPs                 []net.IP
+	OCSP, CRL           []string // revocation URLs to put in the certificate
 }
 
 func gen(cn string, isCA bool, parent *Cert, o Opts) *Cert {
@@ -56,6 +57,8 @@ func gen(cn string, isCA bool, parent *Cert, o Opts) *Cert {
 		IsCA:                  isCA,
 		DNSNames:              o.DNS,
 		IPAddresses:           o.IPs,
+		OCSPServer:            o.OCSP,
+		CRLDistributionPoints: o.CRL,
 	}
 	if isCA {
 		tmpl.KeyUsage = x509.KeyUsageCertSign | x509.KeyUsageCRLSign

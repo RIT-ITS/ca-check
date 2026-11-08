@@ -17,6 +17,7 @@ import (
 	"ca-chain-check/internal/netguard"
 	"ca-chain-check/internal/probe"
 	"ca-chain-check/internal/ratelimit"
+	"ca-chain-check/internal/revocation"
 	"ca-chain-check/internal/server"
 	"ca-chain-check/internal/truststore"
 	"ca-chain-check/web"
@@ -52,6 +53,12 @@ func main() {
 			Sem:      make(chan struct{}, cfg.MaxConcurrent),
 			Resolver: probe.NewResolver(cfg.DNSServers, cfg.DialTimeout),
 		},
+	}
+	if cfg.CheckRevocation {
+		srv.Prober.Revocation = &revocation.Checker{
+			Guard: guard, Resolver: srv.Prober.Resolver,
+			Timeout: cfg.RevocationTimeout, DisableIPv6: cfg.DisableIPv6,
+		}
 	}
 	hs := &http.Server{
 		Addr:              cfg.ListenAddr,
