@@ -352,7 +352,7 @@ func label(ci CertInfo) string {
 	if ci.Index >= 0 {
 		return fmt.Sprintf("#%d %s", ci.Index, ci.SubjectCN)
 	}
-	return ci.SubjectCN + " (trust list)"
+	return ci.SubjectCN + " (trust store)"
 }
 
 func (a *analyzer) checks(res *Result) []Check {
@@ -374,13 +374,13 @@ func (a *analyzer) checks(res *Result) []Check {
 		}
 		if len(trusted) > 0 {
 			c.Status = Pass
-			c.Detail = fmt.Sprintf("%d of %d path(s) end at a root in the trust list.", countTrusted(a.paths), len(a.paths))
+			c.Detail = fmt.Sprintf("%d of %d path(s) end at a root in the trust store.", countTrusted(a.paths), len(a.paths))
 			c.Items = trusted
 		} else {
 			c.Status = Fail
 			switch {
 			case terms[TermUntrustedRoot] > 0:
-				c.Detail = "The chain ends at a self-signed root that is not in the trust list."
+				c.Detail = "The chain ends at a self-signed root that is not in the trust store."
 			default:
 				c.Detail = "No issuer could be found for the top of the chain (incomplete chain — a required intermediate is probably missing)."
 			}
@@ -509,7 +509,7 @@ func (a *analyzer) checks(res *Result) []Check {
 				c.Items = append(c.Items, fmt.Sprintf("%s — duplicate of position #%d", label(ci), ci.DuplicateOf))
 			case "alternate_path":
 				c.Status = Worst(c.Status, Warn)
-				c.Items = append(c.Items, fmt.Sprintf("%s — only on a path that does not reach the trust list (cross-sign for older clients?)", label(ci)))
+				c.Items = append(c.Items, fmt.Sprintf("%s — only on a path that does not reach the trust store (cross-sign for older clients?)", label(ci)))
 			}
 		}
 		if c.Status != Pass {
@@ -657,7 +657,7 @@ func (a *analyzer) mermaid(res *Result) (string, []KeyEntry) {
 		declared[ci.ID] = true
 		where := fmt.Sprintf("sent #%d", ci.Index)
 		if ci.Index < 0 {
-			where = "trust list (not sent)"
+			where = "trust store (not sent)"
 		}
 		extra := ""
 		switch {

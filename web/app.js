@@ -61,7 +61,7 @@
 
   // What each test expects, phrased as a reference value.
   const EXPECTED = {
-    mozilla_root: "At least one path ends at a root in the trust list",
+    mozilla_root: "At least one path ends at a root in the trust store",
     order: "Leaf first, each certificate followed by its issuer",
     validity: "Every certificate on the path is inside its validity period",
     extra_certs: "Only the leaf and the intermediates it needs",
@@ -80,7 +80,7 @@
     if (!ts) return;
     const when = ts.loadedAt ? fmtDateTime(ts.loadedAt) : "unknown";
     const src = ts.source && ts.source.startsWith("http") ? "downloaded" : "built-in copy";
-    $("#store-info").textContent = `Root trust list: ${ts.count} roots (${src}), loaded ${when}.`;
+    $("#store-info").textContent = `Root trust store: ${ts.count} roots (${src}), loaded ${when}.`;
   }
 
   // ---------- input ----------
@@ -147,7 +147,7 @@
     if (n < 730) return `${n} day${n === 1 ? "" : "s"} left`;
     return `${(n / 365).toFixed(1)} years left`;
   }
-  const certLabel = (c) => (c.index >= 0 ? `#${c.index} ${c.subjectCN}` : `${c.subjectCN} (trust list)`);
+  const certLabel = (c) => (c.index >= 0 ? `#${c.index} ${c.subjectCN}` : `${c.subjectCN} (trust store)`);
 
   // ---------- empty state ----------
   function renderIntro() {
@@ -183,7 +183,7 @@
         cons.detail && list.length > 1 ? `. ${cons.detail}` : "."),
       h("dl", { class: "meta" },
         metaItem("Checked", fmtDateTime(data.checkedAt)),
-        metaItem("Trust list", data.trustStore ? `${data.trustStore.count} roots` : "—"),
+        metaItem("Trust store", data.trustStore ? `${data.trustStore.count} roots` : "—"),
         first.tls ? metaItem("SNI", first.tls.sni || "none (IP literal)", true, true) : null,
         list.length > 1 ? metaItem("Across IPs", cons.status === "warn" ? "Different chains" : cons.status === "pass" ? "Identical chains" : "Not comparable") : null));
     sheet.append(head);
@@ -412,7 +412,7 @@
         h("small", {}, `${a.chain.length} certificate${a.chain.length === 1 ? "" : "s"}, in the order the server sent them`)),
       h("div", { class: "certs" }, certHead(), a.chain.map(certRow)));
     if (a.storeRoots && a.storeRoots.length) {
-      sec.append(h("h2", { class: "sec", style: "margin-top:24px" }, "Roots from the trust list", h("small", {}, "not sent by the server, used to complete a path")),
+      sec.append(h("h2", { class: "sec", style: "margin-top:24px" }, "Roots from the trust store", h("small", {}, "not sent by the server, used to complete a path")),
         h("div", { class: "certs" }, certHead(), a.storeRoots.map(certRow)));
     }
     return sec;
@@ -430,7 +430,7 @@
     else if (c.isCA) tag("neutral", c.selfSigned ? "Root" : "Intermediate");
     if (c.inMozilla) tag("pass", "Trusted root");
     else if (c.selfSigned) tag("fail", "Untrusted root");
-    if (c.onTrustedPath && !c.inMozilla) tag("pass", "On trusted path");
+    if (c.onTrustedPath && !c.inMozilla) tag("pass", "On a trusted path");
     if (c.status === "expired") tag("fail", "Expired");
     if (c.status === "not_yet_valid") tag("fail", "Not yet valid");
     if (c.status === "expiring_soon") tag("warn", "Expiring soon");
@@ -494,7 +494,7 @@
         p.nodes.forEach((id, i) => {
           if (i) parts.push(h("span", { class: "arrow", "aria-hidden": "true" }, "→"), h("span", { class: "sr" }, " issued by "));
           const c = byId[id];
-          parts.push(c ? (c.index >= 0 ? `#${c.index} ${c.subjectCN}` : `${c.subjectCN} (trust list)`) : id);
+          parts.push(c ? (c.index >= 0 ? `#${c.index} ${c.subjectCN}` : `${c.subjectCN} (trust store)`) : id);
         });
         if (p.terminal === "incomplete") parts.push(h("span", { class: "arrow", "aria-hidden": "true" }, "→"), h("span", { class: "sr" }, " issued by "), `missing: ${p.missingIssuer}`);
         const [st, word] = TERM[p.terminal];
@@ -536,14 +536,14 @@
   // What each diagram style means. The server sends only the styles this
   // diagram uses, with their colours, so the key always matches the drawing.
   const KEY_TEXT = {
-    trusted: ["Trusted path", "Sent by the server and part of a path that reaches a trusted root."],
-    store: ["Trusted root, not sent", "From the trust list. Servers normally leave the root out, so this is fine."],
+    trusted: ["On a trusted path", "Sent by the server and part of a path that reaches a trusted root."],
+    store: ["Trusted root, not sent", "From the trust store. Servers normally leave the root out, so this is fine."],
     other: ["Not on a trusted path", "Sent by the server, but no path from it reaches a trusted root."],
     pending: ["Pending distrust", "Scheduled to lose trust. Plan to replace it."],
-    alternate: ["Not needed", "Only on a path that doesn't reach a trusted root. Usually an old cross-sign kept for older clients."],
+    alternate: ["Not needed", "Only on a path that doesn't reach a trusted root. It may be an old cross-sign kept for older clients."],
     invalid: ["Expired or not yet valid", "Outside its validity dates, so clients reject it."],
     unrelated: ["Unrelated", "Not on any path from this site's certificate. Remove it."],
-    missing: ["Missing issuer", "Not sent by the server and not in the trust list, so the path stops here. Its arrow is dashed."],
+    missing: ["Missing issuer", "Not sent by the server and not in the trust store, so the path stops here. Its arrow is dashed."],
     link: ["Issued", "Points from the issuer down to the certificate it signed."],
     "trusted-link": ["Trusted link", "Part of a path that reaches a trusted root."],
   };

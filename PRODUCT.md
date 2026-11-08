@@ -15,7 +15,7 @@ web
 
 CA Chain Check connects to a host and port over TLS with SNI. It accepts whatever chain the server presents, without trust-validating it, and says what is wrong with that chain:
 
-- whether it reaches a root in the trust list (by default Mozilla's CCADB roots; the interface says "trust list" and never names the source)
+- whether it reaches a root in the trust store (by default Mozilla's CCADB roots; the interface says "trust store" and never names the source)
 - whether the certificates are in issuance order
 - whether any certificate is expired or not yet valid
 - whether the server sends CAs it doesn't need
@@ -44,7 +44,7 @@ Success means a user knows within seconds whether the chain is right and, if it 
 - **Interface:** a single-page web UI served by a Go binary from embedded static files. The frontend is plain HTML, CSS and JS with no build step. Mermaid 11 is vendored locally because there is no CDN at runtime.
 - **CSP:** `default-src 'self'`, no inline scripts. `style-src` allows `'unsafe-inline'` only because Mermaid puts `<style>` in its SVG. Fonts and assets must be self-hosted.
 - **API:** `POST /api/check {host, port, connectIPs?}` returns per-IP results, each with checks, the chain as sent, Mozilla store roots, paths and Mermaid source. `GET /api/config` returns UI flags (whether IP override is allowed, the trust store info).
-- **Terminology:** leaf, intermediate, root, issuer, subject, chain as sent, path, cross-sign, trust list (root store; default source Mozilla CCADB), pending distrust, SNI, fingerprint (SHA-256).
+- **Terminology:** leaf, intermediate, root, issuer, subject, chain as sent, path, cross-sign, trust store (default source Mozilla CCADB), pending distrust, SNI, fingerprint (SHA-256).
 - **Check statuses:** pass, info, warn, fail.
 - **Undecided:** shareable result links. The UI already pre-fills the form from `?host=&port=` but doesn't run the check automatically.
 

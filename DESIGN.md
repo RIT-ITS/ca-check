@@ -308,7 +308,7 @@ Nearly square. Controls, tables, the interpretation box and the plate use a 3px 
 - Disclosure rows on a shared six-column grid (position, subject, issuer, expiry, flags, chevron), 48px minimum height. Hover and open states use sheet-alt; the chevron rotates 90 degrees over 160ms. The body is a key-value list and a scrollable PEM well (max 260px) with a Copy PEM button.
 
 ### Validity Range Graph (signature)
-- Each certificate's validity is a bar drawn to scale on one shared time axis, with labels left and dates right. Bars are 10px ink at 82% opacity; trust-list roots not sent are dashed outlines; expiring-soon bars are solid warn; expired and not-yet-valid bars are hatched fail (135 degrees, 3px stripes) with a 1.5px fail stroke, so the state survives without colour. Bars running off the axis fade out on the clipped side. Short bars get a 10px minimum width (3px floor otherwise). A 1.5px ink today line crosses every row, labelled in bold ink on the axis.
+- Each certificate's validity is a bar drawn to scale on one shared time axis, with labels left and dates right. Bars are 10px ink at 82% opacity; trust-store roots not sent are dashed outlines; expiring-soon bars are solid warn; expired and not-yet-valid bars are hatched fail (135 degrees, 3px stripes) with a 1.5px fail stroke, so the state survives without colour. Bars running off the axis fade out on the clipped side. Short bars get a 10px minimum width (3px floor otherwise). A 1.5px ink today line crosses every row, labelled in bold ink on the axis.
 
 ### Paths Diagram Plate
 - The Mermaid diagram sits on a light plate (plate token; #dfe5ea in dark) with plate-ink and plate-muted captions. The diagram reads top-down from roots to the leaf (edges labelled "issued"), a legend of 14 by 10px keys, and a paths table beneath listing route and terminal flag.
@@ -321,7 +321,7 @@ Nearly square. Controls, tables, the interpretation box and the plate use a 3px 
 ### Do:
 - **Do** keep the accent to the primary action, selected tab, focus ring and selection, and bar-edge to the header rule.
 - **Do** keep brand colours in local config (THEME_COLORS), never in the shared stylesheet.
-- **Do** call the root store "the trust list" in the interface, without naming its source.
+- **Do** call the root store "the trust store" in the interface, without naming its source.
 - **Do** pair every status colour with its word and its icon shape; hatch expired bars.
 - **Do** draw validity to scale on one shared axis with an ink today line.
 - **Do** use the xs to 2xl type tokens and the 4px spacing scale; keep tabular numerals on.

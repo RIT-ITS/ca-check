@@ -16,7 +16,7 @@ related_targets: ["web/app.js","web/styles.css"]
 
 ## Constraints
 
-- **User-pinned:** colours used subtly, and themeable per deployment through THEME_COLORS so no institution's brand lives in the shared code. The default palette is inspired by a snowy mountain-town cartoon: night-navy band, snow ground, teal accent, yellow band rule. The accent is never a status colour. The interface calls the root store "the trust list".
+- **User-pinned:** colours used subtly, and themeable per deployment through THEME_COLORS so no institution's brand lives in the shared code. The default palette is inspired by a snowy mountain-town cartoon: night-navy band, snow ground, teal accent, yellow band rule. The accent is never a status colour. The interface calls the root store "the trust store".
 - **Avoid:** marketing feel, a hacker or terminal costume, a generic SaaS card grid, and lost density.
 - **Unchanged:** the API, the behaviour, the per-IP tabs, the expandable certificate details, the Mermaid paths, and the CSP (self-hosted assets only).
 

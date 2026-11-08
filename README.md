@@ -2,10 +2,10 @@
 
 A small web service that connects to `host:port` with TLS and SNI, accepts whatever certificate chain the server presents **without validating it**, and reports what is wrong with it:
 
-- **Root trust:** whether at least one path ends at a root in the trust list. By default the trust list is Mozilla's CCADB roots with the Websites trust bit (`MOZILLA_ROOTS_URL`), refreshed every 24 hours, with an embedded snapshot as fallback. The interface calls it "the trust list" without naming the source.
+- **Root trust:** whether at least one path ends at a root in the trust store. By default the trust store is Mozilla's CCADB roots with the Websites trust bit (`MOZILLA_ROOTS_URL`), refreshed every 24 hours, with an embedded snapshot as fallback. The interface calls it "the trust store" without naming the source.
 - **Order:** whether each certificate is immediately followed by its issuer. This is checked by signature, not just by name.
 - **Validity:** whether each certificate is expired, not yet valid, or expiring soon.
-- **Extra certificates:** certs unrelated to the leaf, duplicates, and cross-signs that are only on paths that do not reach the trust list.
+- **Extra certificates:** certs unrelated to the leaf, duplicates, and cross-signs that are only on paths that do not reach the trust store.
 - **Pending distrust:** CA fingerprints you flag in config as scheduled to lose trust.
 - **Hostname:** whether the leaf certificate matches the host.
 - **Every chain path:** found by searching issuers by name and verified signature, including cross-signs. All paths are drawn as a Mermaid diagram.
