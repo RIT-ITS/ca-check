@@ -63,6 +63,13 @@ func TestCorrectChain(t *testing.T) {
 		t.Errorf("mermaid missing edges:\n%s", r.Mermaid)
 	}
 	wantKey(t, r, "trusted", "store", "trusted-link")
+	// Colour-blind cues: states are named in words and differ by border.
+	if !strings.Contains(r.Mermaid, "<br/>trusted path") || !strings.Contains(r.Mermaid, "<br/>trusted root") {
+		t.Errorf("node states not named in words:\n%s", r.Mermaid)
+	}
+	if !strings.Contains(r.Mermaid, "classDef store fill:#e9f3ec,stroke:#2c6a3d,color:#16202b,stroke-width:3px,stroke-dasharray:6 4") {
+		t.Errorf("store root not drawn thick and dashed:\n%s", r.Mermaid)
+	}
 }
 
 // wantKey checks the diagram key lists exactly the styles in use, in order.
@@ -110,6 +117,11 @@ func TestUnrelatedChainLinked(t *testing.T) {
 	for _, i := range []int{2, 3} {
 		if r.Chain[i].Extraneous != "unrelated" {
 			t.Errorf("chain[%d] extraneous = %q", i, r.Chain[i].Extraneous)
+		}
+	}
+	for _, k := range r.DiagramKey {
+		if k.ID == "unrelated" && (!k.Hatch || k.Class != "bad") {
+			t.Errorf("unrelated key entry not hatched: %+v", k)
 		}
 	}
 	if !strings.Contains(r.Mermaid, "c3 -->|issued| c2") {

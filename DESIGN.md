@@ -226,7 +226,16 @@ A navy-and-snow palette with one teal signal, a yellow band rule and four muted 
 Dark-scheme overrides (styles.css, `prefers-color-scheme: dark`): bar #0e1726, bar-field #18263a, ground #10151b, sheet #181f27, sheet-alt #1e2630, ink #e8edf2, muted #a5b1bd, rule #2d3742, rule-strong #4b5866, fail #ff8a7f on #3a1714, warn #e7b65a on #33270f, note #9cc1e6 on #16263a, pass #7fcf94 on #142a1b, plate #dfe5ea.
 
 ### Diagram palette
-The Mermaid paths diagram (internal/analyze/analyze.go classDefs) reuses the light status pairs on its light plate: trusted and store nodes pass-bg/pass (store dashed 5 4), warn nodes warn-bg/warn, bad nodes fail-bg/fail, missing issuers transparent with a dashed fail stroke and fail text, other certificates diagram-node/diagram-node-stroke, all with ink labels. Trusted path links are pass at 2.5px.
+The Mermaid paths diagram (the diagramStyles table in internal/analyze/analyze.go) reuses the light status pairs on its light plate. Pass green and fail red have nearly the same luminance, so no state relies on colour: every node names its state in words, and each style has its own border or fill pattern.
+- **Trusted path:** pass-bg/pass, 3px solid border.
+- **Trusted root, not sent:** pass-bg/pass, 3px border dashed 6 4.
+- **Pending distrust / not needed:** warn-bg/warn, 2px border dotted 2 3.
+- **Expired / unrelated:** fail-bg/fail, 1.5px border, fill hatched at 45 degrees (fail stripes at 35% opacity, drawn after render by app.js), matching the validity graph's hatching.
+- **Missing issuer:** transparent, fail text, 1.5px border dashed 6 4.
+- **Other:** diagram-node/diagram-node-stroke, 1.5px solid.
+- **Links:** trusted 3px pass; other 1.5px; to a missing issuer dashed.
+
+The key under the diagram draws the same borders and hatching. The design was checked under simulated protanopia, deuteranopia, tritanopia and greyscale.
 
 ### Named Rules
 **The Signal Rule.** The accent marks action, selection and focus only. If the accent is telling the user something about the chain, it is wrong. Local themes must keep it off the status hues.
@@ -311,7 +320,7 @@ Nearly square. Controls, tables, the interpretation box and the plate use a 3px 
 - Each certificate's validity is a bar drawn to scale on one shared time axis, with labels left and dates right. Bars are 10px ink at 82% opacity; trust-store roots not sent are dashed outlines; expiring-soon bars are solid warn; expired and not-yet-valid bars are hatched fail (135 degrees, 3px stripes) with a 1.5px fail stroke, so the state survives without colour. Bars running off the axis fade out on the clipped side. Short bars get a 10px minimum width (3px floor otherwise). A 1.5px ink today line crosses every row, labelled in bold ink on the axis.
 
 ### Paths Diagram Plate
-- The Mermaid diagram sits on a light plate (plate token; #dfe5ea in dark) with plate-ink and plate-muted captions. The diagram reads top-down from roots to the leaf (edges labelled "issued"), a legend of 14 by 10px keys, and a paths table beneath listing route and terminal flag.
+- The Mermaid diagram sits on a light plate (plate token; #dfe5ea in dark) with plate-ink and plate-muted captions. The diagram reads top-down from roots to the leaf (edges labelled "issued"), a key listing only the styles the diagram uses (36 by 22px swatches drawn with the same border and hatching, plus a name and one line of meaning), and a paths table beneath listing route and terminal flag.
 
 ### Loading
 - A 120 by 3px track with an accent segment sweeping over 1.1s; a 260ms rise reveals results. Both stop under reduced motion.

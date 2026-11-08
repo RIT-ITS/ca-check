@@ -531,6 +531,7 @@
           slot.innerHTML = svg; // produced by Mermaid with securityLevel "strict"
           slot.firstElementChild?.setAttribute("aria-label", "Certificate issuance paths diagram");
           slot.firstElementChild?.setAttribute("role", "img");
+          if (slot.firstElementChild) hatchDiagram(slot.firstElementChild, a.diagramKey);
         } catch (e) {
           slot.replaceChildren(h("p", {}, `Diagram unavailable: ${e.message || e}. The table below lists every path.`));
         }
@@ -561,6 +562,33 @@
     if (!items.length) return null;
     return h("figcaption", {}, h("h3", {}, "Key"), h("ul", { class: "key" }, items));
   }
+  // Diagonal stripes over a node's fill, so problem nodes differ from the
+  // rest by pattern as well as colour (the validity graph hatches the same way).
+  let hatchSeq = 0;
+  function hatchPattern(id, e) {
+    const mk = (tag, attrs) => {
+      const n = document.createElementNS(NS, tag);
+      for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+      return n;
+    };
+    const defs = mk("defs", {});
+    const pat = mk("pattern", { id, patternUnits: "userSpaceOnUse", width: 6, height: 6, patternTransform: "rotate(45)" });
+    pat.append(mk("rect", { width: 6, height: 6, fill: e.fill }), mk("line", { x1: 0, y1: 0, x2: 0, y2: 6, stroke: e.stroke, "stroke-width": 2, "stroke-opacity": 0.35 }));
+    defs.append(pat);
+    return defs;
+  }
+  function hatchDiagram(svg, entries) {
+    const seen = new Set();
+    for (const e of entries || []) {
+      if (e.kind !== "node" || !e.hatch || !e.class || seen.has(e.class)) continue;
+      seen.add(e.class);
+      const id = `${svg.id}-hatch-${e.class}`;
+      svg.prepend(hatchPattern(id, e));
+      for (const g of svg.querySelectorAll(`g.node.${CSS.escape(e.class)}`)) {
+        for (const shape of g.querySelectorAll(":scope > rect, :scope > path, :scope > polygon")) shape.style.setProperty("fill", `url(#${id})`, "important");
+      }
+    }
+  }
   function keySwatch(e) {
     const s = document.createElementNS(NS, "svg");
     s.setAttribute("viewBox", "0 0 36 22");
@@ -570,13 +598,19 @@
       for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
       s.append(n);
     };
-    const dash = e.dashed ? { "stroke-dasharray": "4 3" } : {};
+    const dash = e.dash ? { "stroke-dasharray": e.dash } : {};
     if (e.kind === "link") {
       // A short vertical arrow, matching the diagram's top-down links.
       el("line", { x1: 18, y1: 2, x2: 18, y2: 15, stroke: e.stroke, "stroke-width": e.width, ...dash });
       el("path", { d: "M13 14l5 6 5-6z", fill: e.stroke });
     } else {
-      el("rect", { x: 1, y: 2, width: 34, height: 18, rx: 2, fill: e.fill, stroke: e.stroke, "stroke-width": e.width, ...dash });
+      let fill = e.fill;
+      if (e.hatch) {
+        const id = `key-hatch-${++hatchSeq}`;
+        s.append(hatchPattern(id, e));
+        fill = `url(#${id})`;
+      }
+      el("rect", { x: 1.5, y: 2.5, width: 33, height: 17, rx: 2, fill, stroke: e.stroke, "stroke-width": e.width, ...dash });
       el("path", { d: "M8 9h20M11 14h14", stroke: e.text, "stroke-width": 1.5, "stroke-linecap": "round", opacity: 0.55 });
     }
     return s;

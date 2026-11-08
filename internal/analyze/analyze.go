@@ -626,7 +626,9 @@ type KeyEntry struct {
 	Stroke string  `json:"stroke"`
 	Text   string  `json:"text,omitempty"`
 	Width  float64 `json:"width"`
-	Dashed bool    `json:"dashed,omitempty"`
+	Dash   string  `json:"dash,omitempty"`  // SVG stroke-dasharray; empty is solid
+	Hatch  bool    `json:"hatch,omitempty"` // diagonal stripes over the fill
+	Class  string  `json:"class,omitempty"` // Mermaid class the node style uses
 }
 
 // diagramStyles is the single source of the diagram's colours. Each key
@@ -636,17 +638,21 @@ var diagramStyles = []struct {
 	KeyEntry
 	class string
 }{
-	{KeyEntry{ID: "trusted", Kind: "node", Fill: "#e9f3ec", Stroke: "#2c6a3d", Text: "#16202b", Width: 1.5}, "trusted"},
-	{KeyEntry{ID: "store", Kind: "node", Fill: "#e9f3ec", Stroke: "#2c6a3d", Text: "#16202b", Width: 1.5, Dashed: true}, "store"},
+	// Every state differs by more than colour, for colour-blind readers:
+	// trusted nodes have a thick border (dashed when not sent), warnings a
+	// dotted border, problems are hatched, and each node also says its state
+	// in words. Trusted links are thick; links to a missing issuer dashed.
+	{KeyEntry{ID: "trusted", Kind: "node", Fill: "#e9f3ec", Stroke: "#2c6a3d", Text: "#16202b", Width: 3}, "trusted"},
+	{KeyEntry{ID: "store", Kind: "node", Fill: "#e9f3ec", Stroke: "#2c6a3d", Text: "#16202b", Width: 3, Dash: "6 4"}, "store"},
 	{KeyEntry{ID: "other", Kind: "node", Fill: "#f3f5f7", Stroke: "#7d8a99", Text: "#16202b", Width: 1.5}, "cert"},
-	{KeyEntry{ID: "pending", Kind: "node", Fill: "#fbf3e0", Stroke: "#8a5a00", Text: "#16202b", Width: 1.5}, "warn"},
-	{KeyEntry{ID: "alternate", Kind: "node", Fill: "#fbf3e0", Stroke: "#8a5a00", Text: "#16202b", Width: 1.5}, "warn"},
-	{KeyEntry{ID: "invalid", Kind: "node", Fill: "#fbeceb", Stroke: "#b3261e", Text: "#16202b", Width: 1.5}, "bad"},
-	{KeyEntry{ID: "unrelated", Kind: "node", Fill: "#fbeceb", Stroke: "#b3261e", Text: "#16202b", Width: 1.5}, "bad"},
-	{KeyEntry{ID: "missing", Kind: "node", Fill: "transparent", Stroke: "#b3261e", Text: "#b3261e", Width: 1.5, Dashed: true}, "missing"},
+	{KeyEntry{ID: "pending", Kind: "node", Fill: "#fbf3e0", Stroke: "#8a5a00", Text: "#16202b", Width: 2, Dash: "2 3"}, "warn"},
+	{KeyEntry{ID: "alternate", Kind: "node", Fill: "#fbf3e0", Stroke: "#8a5a00", Text: "#16202b", Width: 2, Dash: "2 3"}, "warn"},
+	{KeyEntry{ID: "invalid", Kind: "node", Fill: "#fbeceb", Stroke: "#b3261e", Text: "#16202b", Width: 1.5, Hatch: true}, "bad"},
+	{KeyEntry{ID: "unrelated", Kind: "node", Fill: "#fbeceb", Stroke: "#b3261e", Text: "#16202b", Width: 1.5, Hatch: true}, "bad"},
+	{KeyEntry{ID: "missing", Kind: "node", Fill: "transparent", Stroke: "#b3261e", Text: "#b3261e", Width: 1.5, Dash: "6 4"}, "missing"},
 	{KeyEntry{ID: "link", Kind: "link", Stroke: "#7d8a99", Width: 1.5}, ""},
-	{KeyEntry{ID: "trusted-link", Kind: "link", Stroke: "#2c6a3d", Width: 2.5}, ""},
-	{KeyEntry{ID: "missing-link", Kind: "link", Stroke: "#7d8a99", Width: 1.5, Dashed: true}, ""},
+	{KeyEntry{ID: "trusted-link", Kind: "link", Stroke: "#2c6a3d", Width: 3}, ""},
+	{KeyEntry{ID: "missing-link", Kind: "link", Stroke: "#7d8a99", Width: 1.5, Dash: "3 3"}, ""},
 }
 
 func (a *analyzer) mermaid(res *Result) (string, []KeyEntry) {
@@ -688,8 +694,6 @@ func (a *analyzer) mermaid(res *Result) (string, []KeyEntry) {
 		if ci.Extraneous == "unrelated" {
 			extra += "<br/>unrelated"
 		}
-		fmt.Fprintf(&b, "  %s[\"%s<br/><small>%s · %s…</small>%s\"]\n",
-			ci.ID, mermaidEscape(ci.SubjectCN), where, ci.SHA256[:12], extra)
 		key := "other"
 		switch {
 		case ci.Status == StatusExpired || ci.Status == StatusNotYetValid:
@@ -705,6 +709,20 @@ func (a *analyzer) mermaid(res *Result) (string, []KeyEntry) {
 		case ci.OnTrustedPath:
 			key = "trusted"
 		}
+		// Name the state in words when nothing above already does, so no
+		// node depends on colour alone.
+		if extra == "" {
+			switch key {
+			case "trusted":
+				extra = "<br/>trusted path"
+			case "alternate":
+				extra = "<br/>not needed"
+			case "other":
+				extra = "<br/>not on a trusted path"
+			}
+		}
+		fmt.Fprintf(&b, "  %s[\"%s<br/><small>%s · %s…</small>%s\"]\n",
+			ci.ID, mermaidEscape(ci.SubjectCN), where, ci.SHA256[:12], extra)
 		used[key] = true
 		fmt.Fprintf(&b, "  class %s %s\n", ci.ID, classOf[key])
 	}
@@ -780,14 +798,16 @@ func (a *analyzer) mermaid(res *Result) (string, []KeyEntry) {
 		}
 		if st.class != "" && !classDone[st.class] {
 			classDone[st.class] = true
-			fmt.Fprintf(&b, "  classDef %s fill:%s,stroke:%s,color:%s", st.class, st.Fill, st.Stroke, st.Text)
-			if st.Dashed {
-				b.WriteString(",stroke-dasharray:5 4")
+			fmt.Fprintf(&b, "  classDef %s fill:%s,stroke:%s,color:%s,stroke-width:%gpx", st.class, st.Fill, st.Stroke, st.Text, st.Width)
+			if st.Dash != "" {
+				b.WriteString(",stroke-dasharray:" + st.Dash)
 			}
 			b.WriteString("\n")
 		}
 		if used[st.ID] {
-			key = append(key, st.KeyEntry)
+			e := st.KeyEntry
+			e.Class = st.class
+			key = append(key, e)
 		}
 	}
 	return b.String(), key
