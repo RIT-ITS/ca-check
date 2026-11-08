@@ -36,45 +36,45 @@ colors:
   diagram-node-stroke: "#7d8a99"
 typography:
   display:
-    fontFamily: "Public Sans, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif"
+    fontFamily: "Fira Sans, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif"
     fontSize: "1.75rem"
     fontWeight: 700
     lineHeight: 1.2
     letterSpacing: "-0.015em"
     fontFeature: "tnum"
   headline:
-    fontFamily: "Public Sans, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif"
+    fontFamily: "Fira Sans, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif"
     fontSize: "1.375rem"
     fontWeight: 700
     lineHeight: 1.3
     letterSpacing: "-0.01em"
     fontFeature: "tnum"
   title:
-    fontFamily: "Public Sans, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif"
+    fontFamily: "Fira Sans, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif"
     fontSize: "1.125rem"
     fontWeight: 700
     lineHeight: 1.5
     fontFeature: "tnum"
   body:
-    fontFamily: "Public Sans, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif"
+    fontFamily: "Fira Sans, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif"
     fontSize: "0.9375rem"
     fontWeight: 400
     lineHeight: 1.5
     fontFeature: "tnum"
   body-sm:
-    fontFamily: "Public Sans, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif"
+    fontFamily: "Fira Sans, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif"
     fontSize: "0.8125rem"
     fontWeight: 400
     lineHeight: 1.5
     fontFeature: "tnum"
   label:
-    fontFamily: "Public Sans, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif"
+    fontFamily: "Fira Sans, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif"
     fontSize: "0.75rem"
     fontWeight: 600
     lineHeight: 1.5
     fontFeature: "tnum"
   flag:
-    fontFamily: "Public Sans, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif"
+    fontFamily: "Fira Sans, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif"
     fontSize: "0.75rem"
     fontWeight: 700
     lineHeight: 1.5
@@ -195,7 +195,7 @@ The page follows the OS colour scheme. In dark, the ground and sheet go charcoal
 **Key Characteristics:**
 - Navy header band closed by a 3px yellow rule (bar-edge).
 - White sheets, 1px hairlines, no shadows; depth is ruled, not lifted.
-- One family (Public Sans, self-hosted) on a fixed scale with tabular numerals; system mono for machine identifiers only.
+- One family (Fira Sans, self-hosted) on a fixed scale with tabular numerals; system mono for machine identifiers only.
 - Status as word plus shape (Fail, Warn, Note, Pass with authored 16px icons), tinted red, ochre, slate or green.
 - Validity drawn to scale on one shared axis with an ink today line.
 
@@ -248,7 +248,7 @@ The key under the diagram draws the same borders and hatching. The design was ch
 
 ## Typography
 
-**Body Font:** Public Sans variable (self-hosted, weights 100 to 900), with system-ui fallback
+**Body Font:** Fira Sans (self-hosted woff2, weights 400, 600 and 700, Latin and Latin Extended; SIL OFL 1.1), with system-ui fallback
 **Mono Font:** system mono stack (ui-monospace, SF Mono, Cascadia Mono, JetBrains Mono, Menlo, Consolas)
 
 **Character:** One sober institutional sans for every word, with tabular figures throughout so dates, ports and positions align in columns. Mono is a data type, not a voice.
@@ -264,7 +264,7 @@ The key under the diagram draws the same borders and hatching. The design was ch
 - **Mono** (0.92em of context): fingerprints, PEM, serials, key IDs, OIDs, IPs, SNI, the host field, cipher names and the IP tabs.
 
 ### Named Rules
-**The One Family Rule.** Public Sans on the fixed xs to 2xl tokens; no ad hoc sizes, no second display face.
+**The One Family Rule.** Fira Sans on the fixed xs to 2xl tokens; no ad hoc sizes, no second display face.
 
 **The Machine Mono Rule.** Mono only for strings a user would paste into a terminal or ticket.
 

@@ -608,7 +608,7 @@
     "keyCharacteristics": [
       "Navy header band closed by a 3px yellow rule (bar-edge).",
       "White sheets, 1px hairlines, no shadows; depth is ruled, not lifted.",
-      "One family (Public Sans, self-hosted) on a fixed scale with tabular numerals; system mono for machine identifiers only.",
+      "One family (Fira Sans, self-hosted) on a fixed scale with tabular numerals; system mono for machine identifiers only.",
       "Status as word plus shape (Fail, Warn, Note, Pass with authored 16px icons), tinted red, ochre, slate or green.",
       "Validity drawn to scale on one shared axis with an ink today line."
     ],
@@ -635,7 +635,7 @@
       },
       {
         "name": "The One Family Rule",
-        "body": "Public Sans on the fixed xs to 2xl tokens; no ad hoc sizes, no second display face.",
+        "body": "Fira Sans on the fixed xs to 2xl tokens; no ad hoc sizes, no second display face.",
         "section": "typography"
       },
       {

@@ -26,7 +26,7 @@ related_targets: ["web/app.js","web/styles.css"]
 
 **OWN-WORLD:**
 - **Surfaces:** navy header band with a 3px yellow rule. Pale snow ground, and white report sheets with 1px cool-gray hairline rules.
-- **Type:** Public Sans (institutional, self-hosted) for all text, with tabular figures. System mono only for machine identifiers: fingerprints, PEM, serials, key IDs, OIDs, IP addresses, SNI and the hostname field, and cipher names.
+- **Type:** Fira Sans (institutional, self-hosted) for all text, with tabular figures. System mono only for machine identifiers: fingerprints, PEM, serials, key IDs, OIDs, IP addresses, SNI and the hostname field, and cipher names.
 - **Status:** a flag column carries FAIL, WARN or NOTE as words plus a shape, tinted red, ochre or slate. The accent is reserved for the primary action, the selected tab and focus.
 
 **STORY:** The visitor submits a host. They read the interpretation (the verdict plus the exact fix), scan the result table for flags, open a certificate row only when they need the evidence, and copy what they need into a ticket.
