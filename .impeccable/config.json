@@ -38,6 +38,15 @@
         ],
         "createdAt": "2026-11-08T20:55:26.961Z",
         "reason": "Static scan pairs dark-mode sheet colours with light-mode ink; rendered /swagger passes the URL detector with no findings"
+      },
+      {
+        "rule": "marquee",
+        "value": "*",
+        "files": [
+          "web/swagger.html"
+        ],
+        "createdAt": "2026-11-08T21:04:37.144Z",
+        "reason": "Flagged .meterbar sweep is the main page's loading indicator from shared styles.css; it never renders on /swagger"
       }
     ]
   }
