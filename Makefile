@@ -18,7 +18,7 @@ image:
 	podman build -t $(IMAGE) -f Containerfile .
 
 up:
-	podman compose up -d --build
+	podman compose up -d --build --force-recreate
 
 down:
 	podman compose down

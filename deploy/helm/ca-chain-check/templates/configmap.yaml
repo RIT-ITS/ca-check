@@ -19,12 +19,14 @@ data:
   DNS_OVERRIDES: {{ include "ccc.dnsOverrides" . | quote }}
   DNS_SERVERS: {{ $c.dnsServers | quote }}
   MAX_IPS_PER_HOST: {{ $c.maxIPsPerHost | quote }}
+  DISABLE_IPV6: {{ $c.disableIPv6 | default false | quote }}
   ALLOWED_PORTS: {{ $c.allowedPorts | quote }}
   DIAL_TIMEOUT: {{ $c.dialTimeout | quote }}
   HANDSHAKE_TIMEOUT: {{ $c.handshakeTimeout | quote }}
   EXPIRING_SOON_DAYS: {{ $c.expiringSoonDays | quote }}
   MOZILLA_ROOTS_URL: {{ $c.mozillaRootsURL | quote }}
   TRUSTSTORE_REFRESH: {{ $c.truststoreRefresh | quote }}
+  THEME_COLORS: {{ include "ccc.theme" . | quote }}
   PENDING_DISTRUST_FILE: /etc/ca-chain-check/pending-distrust.yaml
   pending-distrust.yaml: |
     {{- if .Values.pendingDistrust }}

@@ -65,6 +65,10 @@ type Resolution struct {
 	Source  string   `json:"source"`
 	IPs     []string `json:"ips"`
 	Skipped []string `json:"skipped,omitempty"` // beyond MAX_IPS_PER_HOST
+	// IPv4Only is set when DISABLE_IPV6 is on; Dropped lists IPv6 addresses
+	// that were resolved but not tested.
+	IPv4Only bool     `json:"ipv4Only,omitempty"`
+	Dropped  []string `json:"droppedIPv6,omitempty"`
 }
 
 // Consistency compares chains across IPs.
@@ -192,13 +196,20 @@ func (p *Prober) resolve(ctx context.Context, client netip.Addr, host string, co
 			if err != nil {
 				return nil, "", inputErr("invalid connect IP %q", s)
 			}
-			out = append(out, a.Unmap())
+			a = a.Unmap()
+			if p.Cfg.DisableIPv6 && a.Is6() {
+				return nil, "", inputErr("IPv6 is disabled on this server; %s cannot be tested", a)
+			}
+			out = append(out, a)
 		}
 		if len(out) > 0 {
 			return out, SourceRequestOverride, nil
 		}
 	}
 	if a, err := netip.ParseAddr(host); err == nil {
+		if p.Cfg.DisableIPv6 && a.Unmap().Is6() {
+			return nil, "", inputErr("IPv6 is disabled on this server; %s cannot be tested", host)
+		}
 		return []netip.Addr{a}, SourceLiteral, nil
 	}
 	if ips := lookupOverride(p.Cfg.DNSOverrides, host); len(ips) > 0 {
@@ -206,10 +217,17 @@ func (p *Prober) resolve(ctx context.Context, client netip.Addr, host string, co
 	}
 	rctx, cancel := context.WithTimeout(ctx, p.Cfg.DialTimeout)
 	defer cancel()
-	addrs, err := p.Resolver.LookupNetIP(rctx, "ip", host)
+	network := "ip"
+	if p.Cfg.DisableIPv6 {
+		network = "ip4" // don't even ask for AAAA records
+	}
+	addrs, err := p.Resolver.LookupNetIP(rctx, network, host)
 	if err != nil {
 		var dnsErr *net.DNSError
 		if errors.As(err, &dnsErr) && dnsErr.IsNotFound {
+			if p.Cfg.DisableIPv6 {
+				return nil, "", inputErr("hostname %q has no IPv4 address (IPv6 is disabled on this server)", host)
+			}
 			return nil, "", inputErr("hostname %q does not resolve", host)
 		}
 		return nil, "", fmt.Errorf("DNS lookup failed: %w", err)
@@ -267,6 +285,22 @@ func (p *Prober) Plan(ctx context.Context, client netip.Addr, req *Request) (hos
 	}
 	all = dedupeSort(all)
 	res.Source = source
+	if p.Cfg.DisableIPv6 {
+		res.IPv4Only = true
+		v4 := all[:0:0]
+		for _, a := range all {
+			if a.Is6() {
+				res.Dropped = append(res.Dropped, a.String())
+			} else {
+				v4 = append(v4, a)
+			}
+		}
+		if len(v4) == 0 {
+			err = inputErr("%s has only IPv6 addresses, and IPv6 is disabled on this server", host)
+			return
+		}
+		all = v4
+	}
 	for i, a := range all {
 		if i < p.Cfg.MaxIPsPerHost {
 			ips = append(ips, a)
@@ -410,7 +444,7 @@ func consistency(results []IPResult) Consistency {
 	case len(keys) == 1 && len(groups[keys[0]]) == 1:
 		c.Status, c.Detail = analyze.Info, "Only one IP was tested."
 	case len(keys) == 1:
-		c.Status, c.Detail = analyze.Pass, fmt.Sprintf("All %d tested IPs serve an identical chain.", len(groups[keys[0]]))
+		c.Status, c.Detail = analyze.Pass, identicalDetail(len(groups[keys[0]]))
 	default:
 		c.Status, c.Detail = analyze.Warn, fmt.Sprintf("Tested IPs serve %d different chains — check for a misconfigured node behind the load balancer.", len(keys))
 	}
@@ -419,3 +453,10 @@ func consistency(results []IPResult) Consistency {
 
 // Cost returns the rate-limit token cost for probing n IPs.
 func Cost(n int) int { return 1 + n/4 }
+
+func identicalDetail(n int) string {
+	if n == 2 {
+		return "Both reachable IPs serve an identical chain."
+	}
+	return fmt.Sprintf("All %d reachable IPs serve an identical chain.", n)
+}

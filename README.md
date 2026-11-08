@@ -2,15 +2,17 @@
 
 A small web service that connects to `host:port` with TLS and SNI, accepts whatever certificate chain the server presents **without validating it**, and reports what is wrong with it:
 
-- **Mozilla root trust:** whether at least one path ends at a root in the Mozilla store, using CCADB roots with the Websites trust bit. The list is refreshed every 24 hours, with an embedded snapshot as fallback.
+- **Root trust:** whether at least one path ends at a root in the trust list. By default the trust list is Mozilla's CCADB roots with the Websites trust bit (`MOZILLA_ROOTS_URL`), refreshed every 24 hours, with an embedded snapshot as fallback. The interface calls it "the trust list" without naming the source.
 - **Order:** whether each certificate is immediately followed by its issuer. This is checked by signature, not just by name.
 - **Validity:** whether each certificate is expired, not yet valid, or expiring soon.
-- **Extra certificates:** certs unrelated to the leaf, duplicates, and cross-signs that are only on non-Mozilla paths.
+- **Extra certificates:** certs unrelated to the leaf, duplicates, and cross-signs that are only on paths that do not reach the trust list.
 - **Pending distrust:** CA fingerprints you flag in config as scheduled to lose trust.
 - **Hostname:** whether the leaf certificate matches the host.
 - **Every chain path:** found by searching issuers by name and verified signature, including cross-signs. All paths are drawn as a Mermaid diagram.
 
 When a hostname resolves to several IPs, every IP is tested and shown in its own tab, along with a consistency verdict ("IPs serve different chains").
+
+Set `DISABLE_IPV6=true` (Helm: `config.disableIPv6`) on hosts without IPv6 connectivity. With it set, AAAA records are never requested, IPv6 entries in `DNS_OVERRIDES` are skipped and listed as not tested, and an IPv6 literal or connect IP is refused with a clear message.
 
 ## Quick start
 
@@ -71,11 +73,29 @@ Fingerprints are SHA-256. Colons and letter case don't matter. Entries from the 
 
 In Helm, set `pendingDistrust:` in your values. It's rendered into the ConfigMap and mounted as the file, and pods restart automatically when it changes.
 
+## Theming
+
+The shared default palette is a navy header band, snow-white report sheets, a teal action colour and a yellow rule under the band. To use your own institution's colours, set `THEME_COLORS` in your local `.env` (which git ignores) or `theme:` in your Helm values. Brand colours then live only in your deployment's config, not in the shared code.
+
+```sh
+THEME_COLORS="accent=0b6e4f accent-hover=0f8a63 bar=102a20 bar-edge=c9a227 dark.bar=08160f"
+```
+
+- Write the pairs as `token=hex`, separated by spaces or `;`. The `#` is optional, since some `.env` parsers treat it as the start of a comment. Anything that isn't a known token or a hex colour stops the server at startup.
+- The server turns these pairs into `/theme.css`, which loads after `styles.css`. It also draws the favicon in the `bar` and `bar-edge` colours.
+- **Tokens:**
+  - **Action:** `accent` (primary button, selected tab, focus ring), `accent-ink` (text on the accent) and `accent-hover`.
+  - **Header band:** `bar`, `bar-ink`, `bar-muted`, `bar-field`, `bar-line`, `bar-line-hover`, `bar-placeholder`, `bar-error`, and `bar-edge` (the 3px rule under the band).
+  - **Report:** `ground`, `sheet`, `sheet-alt`, `ink`, `muted`, `rule`, `rule-strong` and `link`.
+- **Dark mode:** a plain value for `bar`, `bar-field`, `ground`, `sheet`, `sheet-alt`, `ink`, `muted`, `rule`, `rule-strong` or `link` applies in light mode only. Add a `dark.` version (for example `dark.bar=0a0a0a`) to set the dark-mode value. Every other token applies to both modes.
+- Status colours (pass, warn, fail, note) can't be themed, because they carry meaning and are tuned for contrast.
+- Keep `accent` at 3:1 or more against `sheet` and `bar` so the focus ring stays visible, and keep `accent-ink` at 4.5:1 or more on `accent`.
+
 ## Local deployment (Podman Compose + Traefik)
 
 ```sh
 cp .env.example .env    # set APP_HOST, TRAEFIK_NETWORK, TRAEFIK_ENTRYPOINT, TRAEFIK_CERTRESOLVER
-podman compose up -d --build
+podman compose up -d --build --force-recreate   # podman-compose keeps the old container without --force-recreate
 ```
 
 The app joins the external Traefik network and publishes no ports itself. Traefik picks up the router, service, health check and rate-limit middleware from the labels.

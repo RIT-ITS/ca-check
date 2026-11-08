@@ -41,8 +41,8 @@ traefik:
   # Edge rate limit (second layer; the app also limits per client IP).
   middleware:
     enabled: false
-    average: 20
-    burst: 10
+    average: 120
+    burst: 60
     period: 1m
     # Group by this request header instead of the client IP (e.g. CF-Connecting-IP).
     sourceHeader: ""
@@ -69,6 +69,8 @@ config:
   # Custom resolvers, e.g. "10.96.0.10:53" (kube-dns). Empty = pod resolver.
   dnsServers: ""
   maxIPsPerHost: 16
+  # Test IPv4 only (no AAAA lookups; IPv6 targets refused).
+  disableIPv6: false
   allowedPorts: ""
 
   dialTimeout: 5s
@@ -87,7 +89,17 @@ dnsOverrides: {}
 pendingDistrust: []
 #  - fingerprint: "AB:CD:...:EF"
 #    date: "2027-01-15"
-#    note: "Example CA distrusted by Mozilla for TLS"
+#    note: "Example CA losing browser trust for TLS"
+
+# Colour theme overrides (hex). Empty keeps the shared default palette.
+# Token names are listed in README ("Theming"); "dark" holds dark-mode values.
+theme: {}
+#  accent: "#0b6e4f"
+#  accent-hover: "#0f8a63"
+#  bar: "#102a20"
+#  bar-edge: "#c9a227"
+#  dark:
+#    bar: "#08160f"
 
 extraEnv: []
 

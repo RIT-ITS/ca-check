@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 	"testing/fstest"
 
@@ -171,5 +172,56 @@ func TestInputValidation(t *testing.T) {
 		if w := post(h, "198.51.100.1:1", body); w.Code != 400 {
 			t.Errorf("%v: %d %s", body, w.Code, w.Body)
 		}
+	}
+}
+
+func TestDisableIPv6(t *testing.T) {
+	root := testpki.Root("Root V")
+	leaf := testpki.Leaf("dual.test", root)
+	addr := tlsServer(t, testpki.TLSCert(leaf))
+	h := setup(t, map[string]string{
+		"DISABLE_IPV6":     "true",
+		"RATE_LIMIT_BURST": "50", "RATE_LIMIT_RPM": "1000",
+		"DNS_OVERRIDES": "dual.test=198.51.100.7,2001:db8::7;v6only.test=2001:db8::8",
+	}, map[string]string{"198.51.100.7": addr})
+
+	w := post(h, "203.0.113.50:5555", map[string]any{"host": "dual.test", "port": 443})
+	if w.Code != 200 {
+		t.Fatalf("status %d: %s", w.Code, w.Body)
+	}
+	var resp probe.Response
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	if len(resp.Results) != 1 || resp.Results[0].IP != "198.51.100.7" || !resp.Resolution.IPv4Only ||
+		len(resp.Resolution.Dropped) != 1 || resp.Resolution.Dropped[0] != "2001:db8::7" {
+		t.Fatalf("resolution %+v results %d", resp.Resolution, len(resp.Results))
+	}
+	for _, body := range []map[string]any{
+		{"host": "v6only.test", "port": 443},
+		{"host": "2001:db8::9", "port": 443},
+		{"host": "dual.test", "port": 443, "connectIPs": []string{"2001:db8::7"}},
+	} {
+		if w := post(h, "203.0.113.50:5555", body); w.Code != 400 || !strings.Contains(w.Body.String(), "IPv6") {
+			t.Errorf("%v: %d %s", body, w.Code, w.Body)
+		}
+	}
+}
+
+func TestVersionedAssets(t *testing.T) {
+	cfg, _ := config.LoadFrom(func(string) string { return "" })
+	s := &Server{Cfg: cfg, Static: fstest.MapFS{
+		"index.html": {Data: []byte(`<link href="styles.css"><script src="app.js"></script>`)},
+		"styles.css": {Data: []byte("body{}")},
+	}}
+	h := s.Handler()
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest("GET", "/", nil))
+	body := w.Body.String()
+	if !strings.Contains(body, `href="styles.css?v=`) || !strings.Contains(body, `src="app.js?v=`) || w.Header().Get("Cache-Control") != "no-cache" {
+		t.Fatalf("index: %q %q", body, w.Header().Get("Cache-Control"))
+	}
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest("GET", "/styles.css?v=abc", nil))
+	if w.Code != 200 || !strings.Contains(w.Header().Get("Cache-Control"), "immutable") {
+		t.Fatalf("asset: %d %q", w.Code, w.Header().Get("Cache-Control"))
 	}
 }

@@ -1,3 +1,9 @@
 bin/
 .env
-.impeccable/
+# Impeccable: keep shared design context (config.json, design.json, surfaces/); ignore caches and review artifacts
+.impeccable/hook.cache.json
+.impeccable/config.local.json
+.impeccable/review/
+.impeccable/mocks/
+.impeccable/questions/
+.impeccable/build/

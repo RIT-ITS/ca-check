@@ -3,18 +3,22 @@ package server
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io/fs"
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"ca-chain-check/internal/config"
 	"ca-chain-check/internal/netguard"
 	"ca-chain-check/internal/probe"
 	"ca-chain-check/internal/ratelimit"
+	"ca-chain-check/internal/theme"
 	"ca-chain-check/internal/truststore"
 )
 
@@ -37,7 +41,30 @@ func (s *Server) Handler() http.Handler {
 		w.Header().Set("Content-Type", "text/plain")
 		_, _ = w.Write([]byte("ok\n"))
 	})
-	mux.Handle("GET /", http.FileServerFS(s.Static))
+	themeCSS := []byte(theme.CSS(s.Cfg.Theme))
+	favicon := theme.Favicon(s.Cfg.Theme)
+	ver := assetVersion(s.Static, themeCSS)
+	index := versionedIndex(s.Static, ver)
+	mux.HandleFunc("GET /theme.css", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/css; charset=utf-8")
+		cacheFor(w, r)
+		_, _ = w.Write(themeCSS)
+	})
+	mux.HandleFunc("GET /favicon.svg", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/svg+xml")
+		cacheFor(w, r)
+		_, _ = w.Write(favicon)
+	})
+	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-cache")
+		_, _ = w.Write(index)
+	})
+	files := http.FileServerFS(s.Static)
+	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+		cacheFor(w, r)
+		files.ServeHTTP(w, r)
+	})
 	return securityHeaders(mux)
 }
 
@@ -121,4 +148,48 @@ func (s *Server) check(w http.ResponseWriter, r *http.Request) {
 	resp := s.Prober.Run(ctx, client, host, req.Port, ips, res)
 	slog.Info("check", "client", client, "host", host, "port", req.Port, "ips", len(ips), "source", res.Source)
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// cacheFor lets CDNs and browsers keep versioned asset URLs (?v=...) for a
+// year and makes them revalidate everything else, so a redeploy is visible
+// at once instead of after the CDN's default TTL.
+func cacheFor(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Query().Get("v") != "" {
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	} else {
+		w.Header().Set("Cache-Control", "no-cache")
+	}
+}
+
+// assetVersion hashes every static file plus the theme, so any change to
+// the frontend or the local theme yields new asset URLs.
+func assetVersion(static fs.FS, extra ...[]byte) string {
+	h := sha256.New()
+	_ = fs.WalkDir(static, ".", func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		if b, e := fs.ReadFile(static, p); e == nil {
+			h.Write([]byte(p))
+			h.Write(b)
+		}
+		return nil
+	})
+	for _, b := range extra {
+		h.Write(b)
+	}
+	return hex.EncodeToString(h.Sum(nil))[:12]
+}
+
+// versionedIndex rewrites the asset references in index.html to carry ?v=.
+func versionedIndex(static fs.FS, ver string) []byte {
+	b, err := fs.ReadFile(static, "index.html")
+	if err != nil {
+		return []byte("index.html missing")
+	}
+	out := string(b)
+	for _, a := range []string{"styles.css", "theme.css", "app.js", "favicon.svg", "vendor/mermaid.min.js"} {
+		out = strings.ReplaceAll(out, `="`+a+`"`, `="`+a+"?v="+ver+`"`)
+	}
+	return []byte(out)
 }

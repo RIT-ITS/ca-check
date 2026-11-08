@@ -59,7 +59,7 @@ func TestCorrectChain(t *testing.T) {
 	if len(r.StoreRoots) != 1 || r.StoreRoots[0].Index != -1 || !r.StoreRoots[0].OnTrustedPath {
 		t.Errorf("store roots: %+v", r.StoreRoots)
 	}
-	if !strings.Contains(r.Mermaid, "c0 -->|issued by| c1") || !strings.Contains(r.Mermaid, "c1 -->|issued by| r0") {
+	if !strings.Contains(r.Mermaid, "c1 -->|issued| c0") || !strings.Contains(r.Mermaid, "r0 -->|issued| c1") {
 		t.Errorf("mermaid missing edges:\n%s", r.Mermaid)
 	}
 }

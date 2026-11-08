@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "marquee",
+        "value": "*",
+        "files": [
+          "web/index.html"
+        ],
+        "createdAt": "2026-11-08T15:28:19.660Z",
+        "reason": "finish reviewer confirmed: .loading .meterbar is an indeterminate in-flight progress indicator, disabled under prefers-reduced-motion"
+      }
+    ]
+  }
+}

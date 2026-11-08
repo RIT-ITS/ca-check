@@ -349,7 +349,7 @@ func label(ci CertInfo) string {
 	if ci.Index >= 0 {
 		return fmt.Sprintf("#%d %s", ci.Index, ci.SubjectCN)
 	}
-	return ci.SubjectCN + " (Mozilla store)"
+	return ci.SubjectCN + " (trust list)"
 }
 
 func (a *analyzer) checks(res *Result) []Check {
@@ -357,9 +357,9 @@ func (a *analyzer) checks(res *Result) []Check {
 	best := a.bestPath()
 	leaf := res.Chain[0]
 
-	// 1. Mozilla root
+	// 1. Trusted root
 	{
-		c := Check{ID: "mozilla_root", Title: "Chains to a Mozilla-trusted root"}
+		c := Check{ID: "mozilla_root", Title: "Chains to a trusted root"}
 		var trusted []string
 		terms := map[string]int{}
 		for _, p := range a.paths {
@@ -371,13 +371,13 @@ func (a *analyzer) checks(res *Result) []Check {
 		}
 		if len(trusted) > 0 {
 			c.Status = Pass
-			c.Detail = fmt.Sprintf("%d of %d path(s) terminate at a root in the Mozilla store.", countTrusted(a.paths), len(a.paths))
+			c.Detail = fmt.Sprintf("%d of %d path(s) end at a root in the trust list.", countTrusted(a.paths), len(a.paths))
 			c.Items = trusted
 		} else {
 			c.Status = Fail
 			switch {
 			case terms[TermUntrustedRoot] > 0:
-				c.Detail = "The chain terminates at a self-signed root that is not in the Mozilla store."
+				c.Detail = "The chain ends at a self-signed root that is not in the trust list."
 			default:
 				c.Detail = "No issuer could be found for the top of the chain (incomplete chain — a required intermediate is probably missing)."
 			}
@@ -506,11 +506,11 @@ func (a *analyzer) checks(res *Result) []Check {
 				c.Items = append(c.Items, fmt.Sprintf("%s — duplicate of position #%d", label(ci), ci.DuplicateOf))
 			case "alternate_path":
 				c.Status = Worst(c.Status, Warn)
-				c.Items = append(c.Items, fmt.Sprintf("%s — only on a non-Mozilla path (cross-sign for legacy clients?)", label(ci)))
+				c.Items = append(c.Items, fmt.Sprintf("%s — only on a path that does not reach the trust list (cross-sign for older clients?)", label(ci)))
 			}
 		}
 		if c.Status != Pass {
-			c.Detail = "The server sends certificates that are not needed to reach a Mozilla root."
+			c.Detail = "The server sends certificates that are not needed to reach a trusted root."
 		}
 		out = append(out, c)
 	}
@@ -605,6 +605,7 @@ func mermaidEscape(s string) string {
 
 func (a *analyzer) mermaid(res *Result) string {
 	var b strings.Builder
+	// Roots at the top, the leaf at the bottom: edges run issuer → subject.
 	b.WriteString("flowchart TD\n")
 	all := append([]CertInfo{}, res.Chain...)
 	all = append(all, res.StoreRoots...)
@@ -616,23 +617,23 @@ func (a *analyzer) mermaid(res *Result) string {
 		declared[ci.ID] = true
 		where := fmt.Sprintf("sent #%d", ci.Index)
 		if ci.Index < 0 {
-			where = "Mozilla store (not sent)"
+			where = "trust list (not sent)"
 		}
 		extra := ""
 		switch {
 		case ci.InMozilla:
-			extra = "<br/>✔ Mozilla root"
+			extra = "<br/>trusted root"
 		case ci.SelfSigned:
-			extra = "<br/>✖ untrusted root"
+			extra = "<br/>untrusted root"
 		}
 		if ci.PendingDistrust != nil {
-			extra += "<br/>⚠ pending distrust"
+			extra += "<br/>pending distrust"
 		}
 		if ci.Status == StatusExpired || ci.Status == StatusNotYetValid {
-			extra += "<br/>✖ " + strings.ReplaceAll(ci.Status, "_", " ")
+			extra += "<br/>" + strings.ReplaceAll(ci.Status, "_", " ")
 		}
 		if ci.Extraneous == "unrelated" {
-			extra += "<br/>✖ unrelated"
+			extra += "<br/>unrelated"
 		}
 		fmt.Fprintf(&b, "  %s[\"%s<br/><small>%s · %s…</small>%s\"]\n",
 			ci.ID, mermaidEscape(ci.SubjectCN), where, ci.SHA256[:12], extra)
@@ -680,18 +681,18 @@ func (a *analyzer) mermaid(res *Result) string {
 		if strings.HasPrefix(e.to, "m") {
 			arrow = "-.->"
 		}
-		fmt.Fprintf(&b, "  %s %s|issued by| %s\n", e.from, arrow, e.to)
+		fmt.Fprintf(&b, "  %s %s|issued| %s\n", e.to, arrow, e.from)
 	}
 	for i, e := range order {
 		if trustedEdge[e] {
-			fmt.Fprintf(&b, "  linkStyle %d stroke:#1a7f37,stroke-width:3px\n", i)
+			fmt.Fprintf(&b, "  linkStyle %d stroke:#2c6a3d,stroke-width:2.5px\n", i)
 		}
 	}
-	b.WriteString("  classDef cert fill:#eef2f7,stroke:#64748b,color:#0f172a\n")
-	b.WriteString("  classDef trusted fill:#dcfce7,stroke:#1a7f37,color:#052e16\n")
-	b.WriteString("  classDef store fill:#dcfce7,stroke:#1a7f37,color:#052e16,stroke-dasharray:5 4\n")
-	b.WriteString("  classDef warn fill:#fef3c7,stroke:#b45309,color:#451a03\n")
-	b.WriteString("  classDef bad fill:#fee2e2,stroke:#b91c1c,color:#450a0a\n")
-	b.WriteString("  classDef missing fill:#fff5f5,stroke:#b91c1c,color:#450a0a,stroke-dasharray:5 4\n")
+	b.WriteString("  classDef cert fill:#f3f5f7,stroke:#7d8a99,color:#16202b\n")
+	b.WriteString("  classDef trusted fill:#e9f3ec,stroke:#2c6a3d,color:#16202b\n")
+	b.WriteString("  classDef store fill:#e9f3ec,stroke:#2c6a3d,color:#16202b,stroke-dasharray:5 4\n")
+	b.WriteString("  classDef warn fill:#fbf3e0,stroke:#8a5a00,color:#16202b\n")
+	b.WriteString("  classDef bad fill:#fbeceb,stroke:#b3261e,color:#16202b\n")
+	b.WriteString("  classDef missing fill:transparent,stroke:#b3261e,color:#b3261e,stroke-dasharray:5 4\n")
 	return b.String()
 }

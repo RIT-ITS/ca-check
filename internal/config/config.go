@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"ca-chain-check/internal/theme"
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -49,6 +51,7 @@ type Config struct {
 	DNSServers               []string
 	MaxIPsPerHost            int
 	AllowedPorts             map[int]bool // empty = all
+	DisableIPv6              bool         // test IPv4 addresses only
 
 	DialTimeout      time.Duration
 	HandshakeTimeout time.Duration
@@ -58,6 +61,8 @@ type Config struct {
 	ExpiringSoonDays  int
 
 	PendingDistrust map[string]PendingDistrust // key: fingerprint
+
+	Theme []theme.Entry // local colour overrides (THEME_COLORS)
 }
 
 // Load reads configuration from the process environment.
@@ -127,6 +132,9 @@ func LoadFrom(get func(string) string) (*Config, error) {
 		}
 	}
 
+	if c.DisableIPv6, err = strconv.ParseBool(str("DISABLE_IPV6", "false")); err != nil {
+		return nil, fail("DISABLE_IPV6", err)
+	}
 	if c.AllowRequestIPOverride, err = strconv.ParseBool(str("ALLOW_REQUEST_IP_OVERRIDE", "true")); err != nil {
 		return nil, fail("ALLOW_REQUEST_IP_OVERRIDE", err)
 	}
@@ -147,6 +155,10 @@ func LoadFrom(get func(string) string) (*Config, error) {
 			return nil, fail("ALLOWED_PORTS", fmt.Errorf("invalid port %q", s))
 		}
 		c.AllowedPorts[p] = true
+	}
+
+	if c.Theme, err = theme.Parse(get("THEME_COLORS")); err != nil {
+		return nil, err
 	}
 
 	c.MozillaRootsURL = str("MOZILLA_ROOTS_URL", DefaultMozillaRootsURL)

@@ -1,0 +1,674 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-08T15:32:31Z",
+  "title": "Design System: CA Chain Check",
+  "extensions": {
+    "colorMeta": {
+      "accent": {
+        "role": "primary",
+        "displayName": "Hat Teal",
+        "canonical": "#138c9c",
+        "tonalRamp": [
+          "#2c0000",
+          "#4f0000",
+          "#722600",
+          "#97471d",
+          "#bc6940",
+          "#e38c63",
+          "#ffb086",
+          "#ffd5aa"
+        ]
+      },
+      "accent-ink": {
+        "role": "primary",
+        "displayName": "Ink on Accent",
+        "canonical": "#000000",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#a5a5a5",
+          "#c9c9c9",
+          "#eeeeee"
+        ]
+      },
+      "bar": {
+        "role": "neutral",
+        "displayName": "Report Black",
+        "canonical": "#1b2a41",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#a5a5a5",
+          "#c9c9c9",
+          "#eeeeee"
+        ],
+        "dark": "#0e1726"
+      },
+      "bar-ink": {
+        "role": "neutral",
+        "displayName": "Band White",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#a5a5a5",
+          "#c9c9c9",
+          "#eeeeee"
+        ]
+      },
+      "bar-muted": {
+        "role": "neutral",
+        "displayName": "Band Gray",
+        "canonical": "#b9c6d3",
+        "tonalRamp": [
+          "#080c0d",
+          "#222627",
+          "#3f4344",
+          "#5e6264",
+          "#7f8385",
+          "#a1a6a8",
+          "#c5cacc",
+          "#eaeff1"
+        ]
+      },
+      "bar-field": {
+        "role": "neutral",
+        "displayName": "Band Field",
+        "canonical": "#24364f",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#a5a5a5",
+          "#c9c9c9",
+          "#eeeeee"
+        ],
+        "dark": "#18263a"
+      },
+      "bar-line": {
+        "role": "neutral",
+        "displayName": "Band Line",
+        "canonical": "#4a5f80",
+        "tonalRamp": [
+          "#080c0e",
+          "#212628",
+          "#3e4346",
+          "#5d6265",
+          "#7e8386",
+          "#a0a6a9",
+          "#c4cace",
+          "#e9eff3"
+        ]
+      },
+      "ground": {
+        "role": "neutral",
+        "displayName": "Snow Ground",
+        "canonical": "#edf1f5",
+        "tonalRamp": [
+          "#0a0b0c",
+          "#242526",
+          "#414243",
+          "#606162",
+          "#818383",
+          "#a3a5a6",
+          "#c7c9ca",
+          "#edeff0"
+        ],
+        "dark": "#10151b"
+      },
+      "sheet": {
+        "role": "neutral",
+        "displayName": "Sheet White",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#a5a5a5",
+          "#c9c9c9",
+          "#eeeeee"
+        ],
+        "dark": "#181f27"
+      },
+      "sheet-alt": {
+        "role": "neutral",
+        "displayName": "Sheet Tint",
+        "canonical": "#f5f7fa",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#242525",
+          "#414242",
+          "#606161",
+          "#818282",
+          "#a4a5a5",
+          "#c8c9c9",
+          "#eeefef"
+        ],
+        "dark": "#1e2630"
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#16202b",
+        "tonalRamp": [
+          "#0a0b0d",
+          "#232527",
+          "#404245",
+          "#5f6164",
+          "#808385",
+          "#a3a5a8",
+          "#c7c9cc",
+          "#eceff2"
+        ],
+        "dark": "#e8edf2"
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted Gray",
+        "canonical": "#4f5b68",
+        "tonalRamp": [
+          "#070c10",
+          "#20262a",
+          "#3c4348",
+          "#5b6267",
+          "#7c8389",
+          "#9ea6ac",
+          "#c2cad0",
+          "#e7f0f6"
+        ],
+        "dark": "#a5b1bd"
+      },
+      "rule": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "#d5dce3",
+        "tonalRamp": [
+          "#0a0c0c",
+          "#232526",
+          "#404243",
+          "#5f6263",
+          "#808384",
+          "#a3a5a6",
+          "#c7cacb",
+          "#eceff0"
+        ],
+        "dark": "#2d3742"
+      },
+      "rule-strong": {
+        "role": "neutral",
+        "displayName": "Strong Hairline",
+        "canonical": "#9fadbb",
+        "tonalRamp": [
+          "#070c0e",
+          "#202629",
+          "#3c4346",
+          "#5b6365",
+          "#7c8487",
+          "#9fa7aa",
+          "#c2cbce",
+          "#e8f0f3"
+        ],
+        "dark": "#4b5866"
+      },
+      "fail": {
+        "role": "status",
+        "displayName": "Fail Red",
+        "canonical": "#b3261e",
+        "tonalRamp": [
+          "#2d0000",
+          "#510000",
+          "#752019",
+          "#9a4238",
+          "#c06458",
+          "#e68779",
+          "#ffab9c",
+          "#ffd0c0"
+        ],
+        "dark": "#ff8a7f"
+      },
+      "fail-bg": {
+        "role": "status",
+        "displayName": "Fail Wash",
+        "canonical": "#fbeceb",
+        "tonalRamp": [
+          "#110808",
+          "#2d2221",
+          "#4a3f3e",
+          "#6a5e5d",
+          "#8c7f7e",
+          "#afa1a0",
+          "#d4c5c4",
+          "#f9eae9"
+        ],
+        "dark": "#3a1714"
+      },
+      "warn": {
+        "role": "status",
+        "displayName": "Warn Ochre",
+        "canonical": "#8a5a00",
+        "tonalRamp": [
+          "#230000",
+          "#421700",
+          "#633600",
+          "#855600",
+          "#a9772e",
+          "#ce9a53",
+          "#f4be77",
+          "#ffe49c"
+        ],
+        "dark": "#e7b65a"
+      },
+      "warn-bg": {
+        "role": "status",
+        "displayName": "Warn Wash",
+        "canonical": "#fbf3e0",
+        "tonalRamp": [
+          "#100a01",
+          "#2a2416",
+          "#484132",
+          "#676150",
+          "#898271",
+          "#aca493",
+          "#d0c9b6",
+          "#f6eedb"
+        ],
+        "dark": "#33270f"
+      },
+      "note": {
+        "role": "status",
+        "displayName": "Note Slate",
+        "canonical": "#35577a",
+        "tonalRamp": [
+          "#000a27",
+          "#032645",
+          "#234466",
+          "#426488",
+          "#6286ab",
+          "#84a9d0",
+          "#a7cdf6",
+          "#ccf3ff"
+        ],
+        "dark": "#9cc1e6"
+      },
+      "note-bg": {
+        "role": "status",
+        "displayName": "Note Wash",
+        "canonical": "#ebf1f6",
+        "tonalRamp": [
+          "#080c0f",
+          "#212629",
+          "#3e4347",
+          "#5d6266",
+          "#7e8388",
+          "#a0a6aa",
+          "#c4cacf",
+          "#e9eff4"
+        ],
+        "dark": "#16263a"
+      },
+      "pass": {
+        "role": "status",
+        "displayName": "Pass Green",
+        "canonical": "#2c6a3d",
+        "tonalRamp": [
+          "#001400",
+          "#003106",
+          "#0c5024",
+          "#337043",
+          "#559363",
+          "#78b685",
+          "#9bdba8",
+          "#c0ffcd"
+        ],
+        "dark": "#7fcf94"
+      },
+      "pass-bg": {
+        "role": "status",
+        "displayName": "Pass Wash",
+        "canonical": "#e9f3ec",
+        "tonalRamp": [
+          "#070d09",
+          "#202722",
+          "#3c443f",
+          "#5b645e",
+          "#7c857f",
+          "#9ea8a1",
+          "#c2ccc5",
+          "#e7f1ea"
+        ],
+        "dark": "#142a1b"
+      },
+      "plate": {
+        "role": "neutral",
+        "displayName": "Diagram Plate",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#a5a5a5",
+          "#c9c9c9",
+          "#eeeeee"
+        ],
+        "dark": "#dfe5ea"
+      },
+      "diagram-node": {
+        "role": "diagram",
+        "displayName": "Diagram Node",
+        "canonical": "#f3f5f7",
+        "tonalRamp": [
+          "#0b0b0c",
+          "#242526",
+          "#414243",
+          "#606162",
+          "#818283",
+          "#a4a5a6",
+          "#c8c9ca",
+          "#edeeef"
+        ]
+      },
+      "diagram-node-stroke": {
+        "role": "diagram",
+        "displayName": "Diagram Node Stroke",
+        "canonical": "#7d8a99",
+        "tonalRamp": [
+          "#050c11",
+          "#1d262c",
+          "#3a444a",
+          "#58636a",
+          "#79848b",
+          "#9ca7ae",
+          "#bfcbd3",
+          "#e4f1f8"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Report title (host:port).",
+        "token": "--fs-2xl"
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Interpretation verdict and empty-state title.",
+        "token": "--fs-xl"
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Section headings, notice headings, brand name.",
+        "token": "--fs-lg"
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Default text; fix lists capped at 80ch.",
+        "token": "--fs-md"
+      },
+      "body-sm": {
+        "displayName": "Body Small",
+        "purpose": "Tables, certificate rows, key-value lists, metadata values.",
+        "token": "--fs-sm"
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Field labels, column headers, metadata terms, tags, axis ticks.",
+        "token": "--fs-xs"
+      },
+      "flag": {
+        "displayName": "Flag",
+        "purpose": "Status flags only; uppercase, paired with an icon.",
+        "token": "--fs-xs"
+      },
+      "mono": {
+        "displayName": "Mono",
+        "purpose": "Machine identifiers only: fingerprints, PEM, serials, key IDs, OIDs, IPs, SNI, host field, ciphers, IP tabs."
+      }
+    },
+    "shadows": [],
+    "hairlines": [
+      {
+        "name": "rule",
+        "value": "1px solid var(--rule)",
+        "purpose": "Row dividers, sheet and panel borders."
+      },
+      {
+        "name": "rule-strong",
+        "value": "1px solid var(--rule-strong)",
+        "purpose": "Table header underline, interpretation and quiet button stroke."
+      },
+      {
+        "name": "band-rule",
+        "value": "3px solid var(--bar-edge)",
+        "purpose": "Bottom edge of the header band."
+      },
+      {
+        "name": "cell-grid",
+        "value": "box-shadow: 1px 0 0 var(--rule), 0 1px 0 var(--rule)",
+        "purpose": "Shared hairlines between metadata strip cells; not elevation."
+      }
+    ],
+    "focus": {
+      "value": "outline: 2px solid var(--accent); outline-offset: 2px",
+      "onAccent": "outline-color: #fff",
+      "onBandInput": "outline-offset: 0; border-color: var(--accent)"
+    },
+    "selection": "color-mix(in srgb, var(--accent) 30%, transparent)",
+    "motion": [
+      {
+        "name": "chevron",
+        "value": "transform 160ms cubic-bezier(0.2, 0.7, 0.2, 1)",
+        "purpose": "Certificate row disclosure chevron rotates 90deg."
+      },
+      {
+        "name": "reveal",
+        "value": "260ms cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Results rise 6px and fade in."
+      },
+      {
+        "name": "sweep",
+        "value": "1.1s cubic-bezier(0.3, 0, 0.2, 1) infinite",
+        "purpose": "Indeterminate loading meter; Hat Teal segment on a 120x3px track."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "none",
+        "purpose": "All of the above disabled under prefers-reduced-motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "stack",
+        "value": "860px",
+        "purpose": "Header stacks; certificate rows and validity graph reflow."
+      },
+      {
+        "name": "narrow",
+        "value": "640px",
+        "purpose": "Probe row wraps; result table becomes stacked rows; 16px insets."
+      },
+      {
+        "name": "container",
+        "value": "1180px"
+      }
+    ],
+    "colorSchemes": {
+      "mode": "prefers-color-scheme",
+      "note": "Dark overrides recorded per colour in colorMeta.*.dark; diagram plate stays light (#dfe5ea)."
+    },
+    "diagramClassDefs": {
+      "source": "internal/analyze/analyze.go",
+      "cert": "fill:#f3f5f7,stroke:#7d8a99,color:#16202b",
+      "trusted": "fill:#e9f3ec,stroke:#2c6a3d,color:#16202b",
+      "store": "fill:#e9f3ec,stroke:#2c6a3d,color:#16202b,stroke-dasharray:5 4",
+      "warn": "fill:#fbf3e0,stroke:#8a5a00,color:#16202b",
+      "bad": "fill:#fbeceb,stroke:#b3261e,color:#16202b",
+      "missing": "fill:transparent,stroke:#b3261e,color:#b3261e,stroke-dasharray:5 4",
+      "trustedLink": "stroke:#2c6a3d,stroke-width:2.5px"
+    },
+    "icons": {
+      "grid": "16px",
+      "stroke": "1.75",
+      "linecap": "round",
+      "linejoin": "round",
+      "color": "currentColor",
+      "set": [
+        "pass",
+        "fail",
+        "warn",
+        "info",
+        "copy",
+        "chev"
+      ]
+    }
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The single Check chain action; Hat Teal with black text.",
+      "html": "<div class=\"ds-band\"><button class=\"ds-btn-primary\" type=\"button\">Check chain</button></div>",
+      "css": ".ds-band { background: var(--bar); padding: 16px; } .ds-btn-primary { font-family: var(--sans); font-variant-numeric: tabular-nums; font-size: var(--fs-md); font-weight: 700; height: 40px; padding: 0 var(--s5); background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 3px; cursor: pointer; white-space: nowrap; } .ds-btn-primary:hover { background: #1aa5b8; } .ds-btn-primary:focus-visible { outline: 2px solid #fff; outline-offset: 2px; } .ds-btn-primary:disabled { opacity: 0.65; cursor: progress; }"
+    },
+    {
+      "name": "Quiet Button",
+      "kind": "button",
+      "refersTo": "button-quiet",
+      "description": "Secondary utility action on the sheet, e.g. Copy PEM.",
+      "html": "<button class=\"ds-btn-quiet\" type=\"button\"><svg viewBox=\"0 0 16 16\" class=\"ds-i\" aria-hidden=\"true\"><path d=\"M5.5 5.5h7v8h-7z\"/><path d=\"M3.5 10.5v-8h7\"/></svg>Copy PEM</button>",
+      "css": ".ds-btn-quiet { font-family: var(--sans); font-variant-numeric: tabular-nums; font-size: var(--fs-xs); font-weight: 600; color: var(--ink); background: var(--sheet); border: 1px solid var(--rule-strong); border-radius: 3px; padding: 4px 10px; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; } .ds-btn-quiet:hover { border-color: var(--ink); } .ds-btn-quiet:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; } .ds-i { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; vertical-align: -3px; }"
+    },
+    {
+      "name": "Header Field",
+      "kind": "input",
+      "refersTo": "input-bar",
+      "description": "Host and port fields on the dark band; mono text, accent focus.",
+      "html": "<div class=\"ds-band\"><label class=\"ds-field\"><span>Host</span><input class=\"ds-input-bar\" placeholder=\"www.example.edu\"></label></div>",
+      "css": ".ds-band { background: var(--bar); padding: 16px; } .ds-field { display: flex; flex-direction: column; gap: var(--s1); font-family: var(--sans); font-variant-numeric: tabular-nums; } .ds-field > span { font-size: var(--fs-xs); font-weight: 600; color: var(--bar-muted); } .ds-input-bar { font-family: var(--mono); font-size: var(--fs-md); height: 40px; padding: 0 var(--s3); color: var(--bar-ink); background: var(--bar-field); border: 1px solid var(--bar-line); border-radius: 3px; width: 100%; } .ds-input-bar::placeholder { color: #93a3b8; } .ds-input-bar:hover { border-color: #7488a6; } .ds-input-bar:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; border-color: var(--accent); }"
+    },
+    {
+      "name": "IP Tabs",
+      "kind": "nav",
+      "refersTo": "tab",
+      "description": "Per-IP tabs: mono, status icon plus IP, accent underline when selected.",
+      "html": "<div class=\"ds-tabs\" role=\"tablist\"><button class=\"ds-tab\" role=\"tab\" aria-selected=\"true\"><svg viewBox=\"0 0 16 16\" class=\"ds-i\" aria-hidden=\"true\"><path d=\"M3.5 8.5l3 3 6-7\"/></svg>93.184.215.14</button><button class=\"ds-tab\" role=\"tab\" aria-selected=\"false\"><svg viewBox=\"0 0 16 16\" class=\"ds-i\" aria-hidden=\"true\"><path d=\"M5.2 1.5h5.6l3.7 3.7v5.6l-3.7 3.7H5.2L1.5 10.8V5.2z\"/><path d=\"M5.8 5.8l4.4 4.4M10.2 5.8l-4.4 4.4\"/></svg>93.184.215.15</button></div>",
+      "css": ".ds-tabs { display: flex; padding: 0 var(--s5); border-bottom: 1px solid var(--rule); background: var(--sheet); } .ds-tab { font-family: var(--mono); font-size: var(--fs-sm); background: none; border: 0; border-bottom: 3px solid transparent; color: var(--muted); padding: var(--s3) var(--s3) calc(var(--s3) - 3px); margin-bottom: -1px; cursor: pointer; display: inline-flex; gap: var(--s2); align-items: center; } .ds-tab:hover { color: var(--ink); } .ds-tab[aria-selected=\"true\"] { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600; } .ds-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; } .ds-tab:nth-child(1) .ds-i { color: var(--pass); } .ds-tab:nth-child(2) .ds-i { color: var(--fail); } .ds-i { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; vertical-align: -3px; }"
+    },
+    {
+      "name": "Status Flags",
+      "kind": "chip",
+      "refersTo": "flag-fail",
+      "description": "Word plus shape, tinted by status; never colour alone.",
+      "html": "<div class=\"ds-flags\"><span class=\"ds-flag ds-fail\"><svg viewBox=\"0 0 16 16\" class=\"ds-i\" aria-hidden=\"true\"><path d=\"M5.2 1.5h5.6l3.7 3.7v5.6l-3.7 3.7H5.2L1.5 10.8V5.2z\"/><path d=\"M5.8 5.8l4.4 4.4M10.2 5.8l-4.4 4.4\"/></svg>Fail</span><span class=\"ds-flag ds-warn\"><svg viewBox=\"0 0 16 16\" class=\"ds-i\" aria-hidden=\"true\"><path d=\"M8 1.8l6.6 11.7H1.4z\"/><path d=\"M8 6.2v3.3\"/><path d=\"M8 11.6v.1\"/></svg>Warn</span><span class=\"ds-flag ds-info\"><svg viewBox=\"0 0 16 16\" class=\"ds-i\" aria-hidden=\"true\"><path d=\"M8 1.6a6.4 6.4 0 1 1 0 12.8A6.4 6.4 0 0 1 8 1.6z\"/><path d=\"M8 7.2v4\"/><path d=\"M8 4.8v.1\"/></svg>Note</span><span class=\"ds-flag ds-pass\"><svg viewBox=\"0 0 16 16\" class=\"ds-i\" aria-hidden=\"true\"><path d=\"M3.5 8.5l3 3 6-7\"/></svg>Pass</span></div>",
+      "css": ".ds-flags { display: flex; gap: 16px; } .ds-flag { font-family: var(--sans); font-variant-numeric: tabular-nums; display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; } .ds-fail { color: var(--fail); } .ds-warn { color: var(--warn); } .ds-info { color: var(--note); } .ds-pass { color: var(--pass); } .ds-i { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; vertical-align: -3px; }"
+    },
+    {
+      "name": "Interpretation Box",
+      "kind": "card",
+      "refersTo": "interpretation-fail",
+      "description": "Verdict plus numbered fixes; tint follows the worst status.",
+      "html": "<div class=\"ds-interp ds-is-fail\"><p class=\"ds-verdict\"><svg viewBox=\"0 0 16 16\" class=\"ds-i\" aria-hidden=\"true\"><path d=\"M5.2 1.5h5.6l3.7 3.7v5.6l-3.7 3.7H5.2L1.5 10.8V5.2z\"/><path d=\"M5.8 5.8l4.4 4.4M10.2 5.8l-4.4 4.4\"/></svg>The chain does not reach a trusted root</p><ol class=\"ds-fixes\"><li>Add the intermediate at position 2 to the chain file.</li></ol></div>",
+      "css": ".ds-interp { font-family: var(--sans); font-variant-numeric: tabular-nums; color: var(--ink); border: 1px solid var(--rule-strong); border-radius: 3px; padding: var(--s4) var(--s5); background: var(--sheet-alt); } .ds-interp.ds-is-fail { background: var(--fail-bg); border-color: color-mix(in srgb, var(--fail) 45%, transparent); } .ds-verdict { margin: 0; font-size: var(--fs-xl); font-weight: 700; line-height: 1.3; letter-spacing: -0.01em; display: flex; gap: var(--s2); align-items: center; } .ds-is-fail .ds-verdict { color: var(--fail); } .ds-verdict .ds-i { width: 22px; height: 22px; } .ds-fixes { margin: var(--s3) 0 0; padding-left: 1.25em; max-width: 80ch; font-size: var(--fs-md); } .ds-fixes li::marker { font-weight: 700; } .ds-i { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; vertical-align: -3px; }"
+    },
+    {
+      "name": "Result Table",
+      "kind": "custom",
+      "refersTo": "result-row-fail",
+      "description": "Test | Result | Expected | Flag; state tints the row, never the grid.",
+      "html": "<table class=\"ds-results\"><thead><tr><th>Test</th><th>Result</th><th>Expected</th><th>Flag</th></tr></thead><tbody><tr class=\"ds-row-fail\"><td class=\"ds-test\">Validity</td><td>Position 1 expired 3 days ago</td><td class=\"ds-exp\">Every certificate on the path is inside its validity period</td><td><span class=\"ds-flag\" style=\"color:var(--fail)\">Fail</span></td></tr><tr><td class=\"ds-test\">Order</td><td>Leaf first, issuers follow</td><td class=\"ds-exp\">Leaf first, each certificate followed by its issuer</td><td><span class=\"ds-flag\" style=\"color:var(--pass)\">Pass</span></td></tr></tbody></table>",
+      "css": ".ds-results { font-family: var(--sans); font-variant-numeric: tabular-nums; width: 100%; border-collapse: collapse; font-size: var(--fs-sm); color: var(--ink); background: var(--sheet); } .ds-results th { text-align: left; font-size: var(--fs-xs); font-weight: 700; color: var(--muted); padding: var(--s2) var(--s3); border-bottom: 1px solid var(--rule-strong); } .ds-results td { padding: var(--s3); border-bottom: 1px solid var(--rule); vertical-align: top; } .ds-row-fail td { background: var(--fail-bg); } .ds-test { font-weight: 600; } .ds-exp { color: var(--muted); } .ds-flag { font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }"
+    },
+    {
+      "name": "Validity Range Graph",
+      "kind": "custom",
+      "refersTo": "validity-bar",
+      "description": "Signature: validity drawn to scale on one shared axis; expired bars hatched; ink today line.",
+      "html": "<div class=\"ds-range\"><div class=\"ds-rrow\"><span class=\"ds-rlabel\">1 leaf</span><div class=\"ds-track\"><span class=\"ds-bar ds-expired\" style=\"left:10%;width:35%\"></span><span class=\"ds-today\" style=\"left:60%\"></span></div><span class=\"ds-rdates\">until <b class=\"ds-bad\">2026-11-05</b></span></div><div class=\"ds-rrow\"><span class=\"ds-rlabel\">2 intermediate</span><div class=\"ds-track\"><span class=\"ds-bar\" style=\"left:5%;width:80%\"></span><span class=\"ds-today\" style=\"left:60%\"></span></div><span class=\"ds-rdates\">until <b>2029-03-01</b></span></div><div class=\"ds-rrow\"><span class=\"ds-rlabel\">3 root (store)</span><div class=\"ds-track\"><span class=\"ds-bar ds-store\" style=\"left:0;width:100%\"></span><span class=\"ds-today\" style=\"left:60%\"></span></div><span class=\"ds-rdates\">until <b>2035-06-04</b></span></div></div>",
+      "css": ".ds-range { font-family: var(--sans); font-variant-numeric: tabular-nums; color: var(--ink); background: var(--sheet); border: 1px solid var(--rule); border-radius: 3px; padding: var(--s3) var(--s4) var(--s2); } .ds-rrow { display: grid; grid-template-columns: 8rem 1fr 8rem; gap: var(--s3); align-items: center; min-height: 32px; } .ds-rrow + .ds-rrow { border-top: 1px dashed var(--rule); } .ds-rlabel { font-size: var(--fs-sm); font-weight: 600; } .ds-rdates { font-size: var(--fs-xs); color: var(--muted); text-align: right; } .ds-rdates b { color: var(--ink); font-weight: 600; } .ds-rdates b.ds-bad { color: var(--fail); } .ds-track { position: relative; height: 32px; } .ds-bar { position: absolute; top: 11px; height: 10px; background: var(--ink); border-radius: 1px; min-width: 3px; opacity: 0.82; box-sizing: border-box; } .ds-bar.ds-store { background: transparent; border: 1.5px dashed var(--ink); opacity: 0.6; } .ds-bar.ds-expired { background: repeating-linear-gradient(135deg, var(--fail) 0 3px, transparent 3px 6px); border: 1.5px solid var(--fail); opacity: 1; } .ds-today { position: absolute; top: 0; bottom: 0; width: 0; border-left: 1.5px solid var(--ink); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Lab Report",
+    "overview": "The check result reads like a clinical lab report rendered as a working tool. A night-navy header band carries the instrument (host, port, the teal Check button); below it a white report sheet sits on a pale gray ground, ruled with 1px gray hairlines. The verdict lives in an interpretation box, the tests sit in a result table with their expected values and a flag column, and the certificates are the specimens, folded into rows that open on demand.\n\nDensity is the point. This is an Operate-mode surface used mid-incident beside a terminal, so type is compact (15px body on a fixed scale), figures are tabular, and machine identifiers stay in system mono so they copy losslessly. colours are used subtly: black, white and grays carry the page, and Hat Teal appears only where the user acts or focuses. Status colour is quarantined to flags, the validity graph and the paths diagram.\n\nThe page follows the OS colour scheme. In dark, the ground and sheet go charcoal and status inks lighten, but the diagram plate stays a light gray so the diagram palette reads true.",
+    "keyCharacteristics": [
+      "Navy header band closed by a 3px yellow rule (bar-edge).",
+      "White sheets, 1px hairlines, no shadows; depth is ruled, not lifted.",
+      "One family (Public Sans, self-hosted) on a fixed scale with tabular numerals; system mono for machine identifiers only.",
+      "Status as word plus shape (Fail, Warn, Note, Pass with authored 16px icons), tinted red, ochre, slate or green.",
+      "Validity drawn to scale on one shared axis with an ink today line."
+    ],
+    "rules": [
+      {
+        "name": "The Signal Rule",
+        "body": "Hat Teal marks action, selection and focus only. If the accent is telling the user something about the chain, it is wrong.",
+        "section": "colors"
+      },
+      {
+        "name": "The Red Means Change Rule",
+        "body": "Red is reserved for findings that need a change. Informational output is slate; nothing decorative is red.",
+        "section": "colors"
+      },
+      {
+        "name": "The Quarantine Rule",
+        "body": "Colour lives only in flags, the validity graph and the diagram. Everything else is black, white and gray.",
+        "section": "colors"
+      },
+      {
+        "name": "The Word-and-Shape Rule",
+        "body": "Status never relies on colour alone: every status carries its word (Fail, Warn, Note, Pass) and a shape (octagon-x, triangle, circle-i, check), and expired validity bars are hatched.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Family Rule",
+        "body": "Public Sans on the fixed xs to 2xl tokens; no ad hoc sizes, no second display face.",
+        "section": "typography"
+      },
+      {
+        "name": "The Machine Mono Rule",
+        "body": "Mono only for strings a user would paste into a terminal or ticket.",
+        "section": "typography"
+      },
+      {
+        "name": "The Fixed Grid Rule",
+        "body": "State restyles a row's tint and mark, never the grid. A failing row keeps its columns, widths and position; only its background and flag change.",
+        "section": "layout"
+      },
+      {
+        "name": "The Ruled-Not-Lifted Rule",
+        "body": "If a surface needs separating, draw a hairline or step the tint. Never cast a shadow.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** keep Hat Teal to the primary action, selected tab, focus ring, selection and the header rule.",
+      "**Do** pair every status colour with its word and its icon shape; hatch expired bars.",
+      "**Do** draw validity to scale on one shared axis with an ink today line.",
+      "**Do** use the xs to 2xl type tokens and the 4px spacing scale; keep tabular numerals on.",
+      "**Do** keep the diagram plate light in both schemes so the diagram palette stays true.",
+      "**Do** meet WCAG 2.2 AA: text at 4.5:1, focus visible, keyboard-operable tabs, fold-outs and copy buttons, reduced motion respected."
+    ],
+    "donts": [
+      "**Don't** use the accent as a status colour.",
+      "**Don't** use red for anything that does not need a change.",
+      "**Don't** let state change a row's grid, column widths or position; restyle tint and mark only.",
+      "**Don't** put colour outside the flags, the validity graph and the diagram.",
+      "**Don't** add kicker or eyebrow labels above headings.",
+      "**Don't** add shadows, soft cards or a second type family."
+    ]
+  }
+}

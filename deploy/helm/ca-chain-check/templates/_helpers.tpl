@@ -35,3 +35,16 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 {{- join ";" $parts }}
 {{- end }}
+
+{{- define "ccc.theme" -}}
+{{- $parts := list }}
+{{- range $k := keys (omit .Values.theme "dark") | sortAlpha }}
+{{- $parts = append $parts (printf "%s=%s" $k (index $.Values.theme $k)) }}
+{{- end }}
+{{- with .Values.theme.dark }}
+{{- range $k := keys . | sortAlpha }}
+{{- $parts = append $parts (printf "dark.%s=%s" $k (index $.Values.theme.dark $k)) }}
+{{- end }}
+{{- end }}
+{{- join ";" $parts }}
+{{- end }}
