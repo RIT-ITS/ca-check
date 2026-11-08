@@ -496,11 +496,11 @@
       h("tbody", {}, a.paths.map((p) => {
         const parts = [];
         p.nodes.forEach((id, i) => {
-          if (i) parts.push(h("span", { class: "arrow", "aria-label": "issued by" }, "→"));
+          if (i) parts.push(h("span", { class: "arrow", "aria-hidden": "true" }, "→"), h("span", { class: "sr" }, " issued by "));
           const c = byId[id];
           parts.push(c ? (c.index >= 0 ? `#${c.index} ${c.subjectCN}` : `${c.subjectCN} (trust list)`) : id);
         });
-        if (p.terminal === "incomplete") parts.push(h("span", { class: "arrow" }, "→"), `missing: ${p.missingIssuer}`);
+        if (p.terminal === "incomplete") parts.push(h("span", { class: "arrow", "aria-hidden": "true" }, "→"), h("span", { class: "sr" }, " issued by "), `missing: ${p.missingIssuer}`);
         const [st, word] = TERM[p.terminal];
         const notes = [];
         if (p.best) notes.push(h("span", { class: "tag pass" }, "Best path"));

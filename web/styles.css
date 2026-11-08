@@ -128,7 +128,7 @@ svg.i { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor;
 .btn-primary:focus-visible { outline-color: #fff; }
 .btn-primary:disabled { opacity: 0.65; cursor: progress; }
 .advanced { margin-top: var(--s2); font-size: var(--fs-sm); }
-.advanced summary { cursor: pointer; color: var(--bar-muted); width: max-content; }
+.advanced summary { cursor: pointer; color: var(--bar-muted); width: max-content; padding: 4px 0; }
 .advanced summary:hover { color: var(--bar-ink); }
 .advanced .field { margin-top: var(--s2); max-width: 560px; }
 .form-error { color: var(--bar-error); margin: var(--s2) 0 0; font-size: var(--fs-sm); }
@@ -177,7 +177,7 @@ h2.sec small { font-size: var(--fs-sm); font-weight: 400; color: var(--muted); }
 .interp .verdict { margin: 0; font-size: var(--fs-xl); font-weight: 700; line-height: 1.3; letter-spacing: -0.01em; display: flex; gap: var(--s2); align-items: center; }
 .interp .verdict svg.i { width: 22px; height: 22px; }
 .interp.fail .verdict { color: var(--fail); } .interp.warn .verdict { color: var(--warn); } .interp.pass .verdict { color: var(--pass); }
-.fixes { margin: var(--s3) 0 0; padding-left: 1.25em; max-width: 80ch; }
+.fixes { margin: var(--s3) 0 0; padding-left: 1.25em; max-width: 64ch; }
 .fixes li { margin-top: var(--s2); }
 .fixes li::marker { font-weight: 700; }
 .fixes ul { margin: var(--s1) 0 0; padding-left: 1.1em; font-size: var(--fs-sm); }
@@ -246,7 +246,7 @@ dl.kv dd { margin: 0; overflow-wrap: anywhere; min-width: 0; }
 .btn-quiet {
   font: inherit; font-size: var(--fs-xs); font-weight: 600; color: var(--ink);
   background: var(--sheet); border: 1px solid var(--rule-strong); border-radius: 3px;
-  padding: 4px 10px; cursor: pointer; display: inline-flex; gap: 6px; align-items: center;
+  min-height: 32px; padding: 4px 12px; cursor: pointer; display: inline-flex; gap: 6px; align-items: center;
 }
 .btn-quiet:hover { border-color: var(--ink); }
 pre.pem {
@@ -270,11 +270,11 @@ table.paths { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); m
 /* Notices, empty, loading */
 .notice { padding: var(--s5); }
 .notice h2 { margin: 0 0 var(--s2); font-size: var(--fs-lg); }
-.notice p { margin: 0; color: var(--muted); max-width: 70ch; }
+.notice p { margin: 0; color: var(--muted); max-width: 62ch; }
 .notice.fail h2 { color: var(--fail); }
 .intro { padding: var(--s5); }
 .intro h1 { font-size: var(--fs-xl); margin: 0 0 var(--s1); letter-spacing: -0.01em; }
-.intro > p { margin: 0 0 var(--s4); color: var(--muted); max-width: 72ch; }
+.intro > p { margin: 0 0 var(--s4); color: var(--muted); max-width: 62ch; }
 .loading { display: flex; align-items: center; gap: var(--s3); padding: var(--s5); font-weight: 600; }
 .loading .meterbar { width: 120px; height: 3px; background: var(--rule); overflow: hidden; border-radius: 2px; position: relative; }
 .loading .meterbar::after { content: ""; position: absolute; inset: 0; width: 40%; background: var(--accent); animation: sweep 1.1s cubic-bezier(0.3, 0, 0.2, 1) infinite; }
@@ -288,6 +288,12 @@ table.paths { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); m
 
 .foot { color: var(--muted); font-size: var(--fs-xs); padding-bottom: var(--s6); }
 .panel > .meta:first-child { margin: 0 0 var(--s5); }
+
+/* Touch screens: comfortable 44px targets for the small controls */
+@media (pointer: coarse) {
+  .btn-quiet { min-height: 44px; padding: 0 var(--s4); }
+  .advanced summary { padding: 12px 0; }
+}
 
 /* ---------- Narrow screens ---------- */
 @media (max-width: 860px) {
