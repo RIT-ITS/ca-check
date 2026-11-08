@@ -8,6 +8,7 @@ A small web service that connects to `host:port` with TLS and SNI, accepts whate
 - **Extra certificates:** certs unrelated to the leaf, duplicates, and cross-signs that are only on paths that do not reach the trust store.
 - **Pending distrust:** CA fingerprints you flag in config as scheduled to lose trust.
 - **Hostname:** whether the leaf certificate matches the host.
+- **Other root stores:** each CA certificate's details link to its [Cloudflare Radar](https://radar.cloudflare.com/certificate-transparency) page (`/certificate-transparency/ca/<SHA-256>`), which shows whether Chrome, Apple, Microsoft and Mozilla include it.
 - **Every chain path:** found by searching issuers by name and verified signature, including cross-signs. All paths are drawn as a Mermaid diagram.
 
 When a hostname resolves to several IPs, every IP is tested and shown in its own tab, along with a consistency verdict ("IPs serve different chains").

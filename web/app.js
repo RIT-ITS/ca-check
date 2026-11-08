@@ -411,7 +411,7 @@
   function chainSection(a) {
     const sec = h("section", { "aria-labelledby": "chain-h" },
       h("h2", { class: "sec", id: "chain-h" }, "Chain as sent",
-        h("small", {}, `${a.chain.length} certificate${a.chain.length === 1 ? "" : "s"}, in the order the server sent them`)),
+        h("small", {}, "in the order the server sent them")),
       h("div", { class: "certs" }, certHead(), a.chain.map(certRow)));
     if (a.storeRoots && a.storeRoots.length) {
       sec.append(h("h2", { class: "sec", style: "margin-top:24px" }, "Roots from the trust store", h("small", {}, "not sent by the server, used to complete a path")),
@@ -447,6 +447,10 @@
       ["Not before", fmtDateTime(c.notBefore)], ["Not after", `${fmtDateTime(c.notAfter)} (${fmtDays(c.daysRemaining)})`],
       ["Public key", `${c.keyAlgorithm}${c.keySize ? `, ${c.keySize}-bit` : ""}`], ["Signature", c.signatureAlgorithm],
       ["SHA-256", c.sha256, true], ["SHA-1", c.sha1, true],
+      // Radar has a page per CA certificate (keyed by SHA-256) showing which
+      // root stores include it. Leaf certificates have no page.
+      ["Root stores", c.isCA ? h("a", { href: `https://radar.cloudflare.com/certificate-transparency/ca/${c.sha256.toUpperCase()}`, target: "_blank", rel: "noopener noreferrer" },
+        "Check on Cloudflare Radar", h("span", { class: "sr" }, " (opens in a new tab)")) : null],
       ["Subject key ID", c.subjectKeyId, true], ["Authority key ID", c.authorityKeyId, true],
       ["CA", c.isCA ? `Yes${c.maxPathLen !== undefined && c.maxPathLen !== null ? `, path length ≤ ${c.maxPathLen}` : ""}` : "No"],
       ["DNS names", (c.dnsNames || []).join(", ")], ["IP addresses", (c.ipAddresses || []).join(", ")],
