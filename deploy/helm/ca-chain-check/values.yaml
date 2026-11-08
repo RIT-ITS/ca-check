@@ -1,0 +1,126 @@
+replicaCount: 2
+
+image:
+  repository: ghcr.io/example/ca-chain-check
+  tag: ""            # defaults to .Chart.AppVersion
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+podAnnotations: {}
+podLabels: {}
+
+service:
+  type: ClusterIP
+  port: 80
+
+# Standard Kubernetes Ingress.
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: chain-check.example.com
+      paths: ["/"]
+  tls: []
+  #  - secretName: chain-check-tls
+  #    hosts: [chain-check.example.com]
+
+# Traefik CRDs (traefik.io/v1alpha1). Use instead of, or alongside, `ingress`.
+traefik:
+  ingressRoute:
+    enabled: false
+    entryPoints: [websecure]
+    host: chain-check.example.com
+    tls:
+      enabled: true
+      certResolver: ""
+      secretName: ""
+  # Edge rate limit (second layer; the app also limits per client IP).
+  middleware:
+    enabled: false
+    average: 20
+    burst: 10
+    period: 1m
+
+# Application configuration -> ConfigMap -> environment.
+config:
+  # Per-client-IP token bucket (per replica). Each check costs 1 + 1 per 4 target IPs.
+  rateLimitRPM: 10
+  rateLimitBurst: 5
+  maxConcurrentProbes: 20
+  # CIDRs whose X-Forwarded-For is trusted: set to your ingress controller pod CIDR.
+  trustedProxies: "10.0.0.0/8"
+
+  # Never testable, by anyone. Add the Kubernetes API service IP etc.
+  targetDenyCIDRs: "0.0.0.0/8,169.254.0.0/16,224.0.0.0/4,240.0.0.0/4,255.255.255.255/32,::/128,ff00::/8,fe80::/10,fd00:ec2::254/128"
+  # Client CIDRs allowed to test private targets. Empty = nobody.
+  privateTargetClientCIDRs: ""
+  privateTargetExtraCIDRs: ""
+
+  allowRequestIPOverride: true
+  ipOverrideClientCIDRs: ""
+  # Custom resolvers, e.g. "10.96.0.10:53" (kube-dns). Empty = pod resolver.
+  dnsServers: ""
+  maxIPsPerHost: 16
+  allowedPorts: ""
+
+  dialTimeout: 5s
+  handshakeTimeout: 5s
+  expiringSoonDays: 30
+
+  mozillaRootsURL: "https://ccadb.my.salesforce-sites.com/mozilla/IncludedRootsPEMTxt?TrustBitsInclude=Websites"
+  truststoreRefresh: 24h
+
+# Static DNS overrides so servers in a cluster can be targeted directly.
+#   api.internal: ["10.0.0.5", "10.0.0.6"]
+#   "*.svc.cluster.local": ["10.96.0.10"]
+dnsOverrides: {}
+
+# CA certificates pending loss of trust (SHA-256 fingerprint, colons optional).
+pendingDistrust: []
+#  - fingerprint: "AB:CD:...:EF"
+#    date: "2027-01-15"
+#    note: "Example CA distrusted by Mozilla for TLS"
+
+extraEnv: []
+
+resources:
+  requests: { cpu: 50m, memory: 64Mi }
+  limits: { memory: 256Mi }
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+  seccompProfile: { type: RuntimeDefault }
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities: { drop: [ALL] }
+
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Restrict egress to DNS + TLS ports; ingress only from the ingress controller namespace.
+networkPolicy:
+  enabled: false
+  ingressNamespaceSelector:
+    kubernetes.io/metadata.name: traefik
+  egressPorts: [443]   # target ports users may test; add 8443 etc. as needed
+  dnsPort: 53
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

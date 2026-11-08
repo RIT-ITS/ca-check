@@ -1,0 +1,9 @@
+CA Chain Check deployed as {{ include "ccc.fullname" . }}.
+{{- if .Values.traefik.ingressRoute.enabled }}
+  URL: https://{{ .Values.traefik.ingressRoute.host }}/
+{{- else if .Values.ingress.enabled }}
+  URL: http{{ if .Values.ingress.tls }}s{{ end }}://{{ (first .Values.ingress.hosts).host }}/
+{{- else }}
+  kubectl port-forward svc/{{ include "ccc.fullname" . }} 8080:{{ .Values.service.port }}
+{{- end }}
+Note: the in-app rate limit is per replica ({{ .Values.config.rateLimitRPM }}/min/IP each).

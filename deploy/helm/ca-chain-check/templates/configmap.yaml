@@ -1,0 +1,33 @@
+{{- $c := .Values.config }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "ccc.fullname" . }}
+  labels: {{- include "ccc.labels" . | nindent 4 }}
+data:
+  LISTEN_ADDR: ":8080"
+  RATE_LIMIT_RPM: {{ $c.rateLimitRPM | quote }}
+  RATE_LIMIT_BURST: {{ $c.rateLimitBurst | quote }}
+  MAX_CONCURRENT_PROBES: {{ $c.maxConcurrentProbes | quote }}
+  TRUSTED_PROXIES: {{ $c.trustedProxies | quote }}
+  TARGET_DENY_CIDRS: {{ $c.targetDenyCIDRs | quote }}
+  PRIVATE_TARGET_CLIENT_CIDRS: {{ $c.privateTargetClientCIDRs | quote }}
+  PRIVATE_TARGET_EXTRA_CIDRS: {{ $c.privateTargetExtraCIDRs | quote }}
+  ALLOW_REQUEST_IP_OVERRIDE: {{ $c.allowRequestIPOverride | quote }}
+  IP_OVERRIDE_CLIENT_CIDRS: {{ $c.ipOverrideClientCIDRs | quote }}
+  DNS_OVERRIDES: {{ include "ccc.dnsOverrides" . | quote }}
+  DNS_SERVERS: {{ $c.dnsServers | quote }}
+  MAX_IPS_PER_HOST: {{ $c.maxIPsPerHost | quote }}
+  ALLOWED_PORTS: {{ $c.allowedPorts | quote }}
+  DIAL_TIMEOUT: {{ $c.dialTimeout | quote }}
+  HANDSHAKE_TIMEOUT: {{ $c.handshakeTimeout | quote }}
+  EXPIRING_SOON_DAYS: {{ $c.expiringSoonDays | quote }}
+  MOZILLA_ROOTS_URL: {{ $c.mozillaRootsURL | quote }}
+  TRUSTSTORE_REFRESH: {{ $c.truststoreRefresh | quote }}
+  PENDING_DISTRUST_FILE: /etc/ca-chain-check/pending-distrust.yaml
+  pending-distrust.yaml: |
+    {{- if .Values.pendingDistrust }}
+    {{- toYaml .Values.pendingDistrust | nindent 4 }}
+    {{- else }}
+    []
+    {{- end }}

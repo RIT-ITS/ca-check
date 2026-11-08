@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CA Chain Check</title>
+  <meta name="description" content="Inspect the TLS certificate chain a server presents: order, expiry, extra CAs, and Mozilla root trust.">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+  <script src="vendor/mermaid.min.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="masthead">
+    <div class="wrap">
+      <h1>CA Chain Check</h1>
+      <p class="lede">Connects to a TLS server with SNI, accepts whatever chain it presents, and tells you what is wrong with it.</p>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <form id="check-form" class="probe" autocomplete="off" novalidate>
+      <div class="fields">
+        <label class="field host">
+          <span>Hostname</span>
+          <input id="host" name="host" type="text" inputmode="url" placeholder="example.com" required spellcheck="false" autocapitalize="off">
+        </label>
+        <label class="field port">
+          <span>Port</span>
+          <input id="port" name="port" type="number" min="1" max="65535" value="443" required>
+        </label>
+        <button id="submit" type="submit">Check chain</button>
+      </div>
+      <details id="advanced" class="advanced" hidden>
+        <summary>Advanced: connect to specific IPs</summary>
+        <label class="field">
+          <span>Connect to IP(s) — overrides DNS, SNI still uses the hostname</span>
+          <input id="connect-ips" type="text" placeholder="10.0.0.5, 10.0.0.6" spellcheck="false">
+        </label>
+      </details>
+      <p id="form-error" class="form-error" role="alert" hidden></p>
+    </form>
+
+    <section id="results" aria-live="polite"></section>
+  </main>
+
+  <footer class="wrap foot">
+    <span id="store-info">Loading trust store info…</span>
+  </footer>
+</body>
+</html>

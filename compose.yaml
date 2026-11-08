@@ -1,0 +1,45 @@
+# Local deployment behind an existing Traefik instance.
+#   cp .env.example .env && podman compose up -d --build
+# Traefik must be attached to the external network named by TRAEFIK_NETWORK.
+name: ca-chain-check
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Containerfile
+    image: localhost/ca-chain-check:latest
+    env_file: .env
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    # Uncomment to run without Traefik:
+    # ports: ["8080:8080"]
+    healthcheck:
+      test: ["CMD", "/ca-chain-check", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks: [traefik]
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: ${TRAEFIK_NETWORK:-traefik}
+      traefik.http.routers.ca-chain-check.rule: Host(`${APP_HOST:-chain-check.localhost}`)
+      traefik.http.routers.ca-chain-check.entrypoints: ${TRAEFIK_ENTRYPOINT:-websecure}
+      traefik.http.routers.ca-chain-check.tls: "true"
+      # Leave TRAEFIK_CERTRESOLVER empty to use Traefik's default certificate.
+      traefik.http.routers.ca-chain-check.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-}
+      traefik.http.routers.ca-chain-check.middlewares: ca-chain-check-ratelimit
+      traefik.http.middlewares.ca-chain-check-ratelimit.ratelimit.average: ${TRAEFIK_RATELIMIT_AVERAGE:-20}
+      traefik.http.middlewares.ca-chain-check-ratelimit.ratelimit.burst: ${TRAEFIK_RATELIMIT_BURST:-10}
+      traefik.http.middlewares.ca-chain-check-ratelimit.ratelimit.period: 1m
+      traefik.http.services.ca-chain-check.loadbalancer.server.port: "8080"
+      traefik.http.services.ca-chain-check.loadbalancer.healthcheck.path: /healthz
+      traefik.http.services.ca-chain-check.loadbalancer.healthcheck.interval: 30s
+
+networks:
+  traefik:
+    name: ${TRAEFIK_NETWORK:-traefik}
+    external: true

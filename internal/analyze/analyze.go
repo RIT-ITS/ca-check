@@ -1,0 +1,697 @@
+// Package analyze inspects a presented certificate chain: ordering, validity
+// periods, extraneous certificates, Mozilla root trust, pending distrust, and
+// every possible issuance path (including cross-signs).
+package analyze
+
+import (
+	"crypto/x509"
+	"fmt"
+	"sort"
+	"strings"
+	"time"
+
+	"ca-chain-check/internal/config"
+	"ca-chain-check/internal/truststore"
+)
+
+// Check statuses, ordered by severity.
+const (
+	Pass = "pass"
+	Info = "info"
+	Warn = "warn"
+	Fail = "fail"
+)
+
+var severity = map[string]int{Pass: 0, Info: 1, Warn: 2, Fail: 3}
+
+// Worst returns the more severe of two statuses.
+func Worst(a, b string) string {
+	if severity[b] > severity[a] {
+		return b
+	}
+	return a
+}
+
+// Path terminal states.
+const (
+	TermMozillaRoot   = "mozilla_root"
+	TermUntrustedRoot = "untrusted_root"
+	TermIncomplete    = "incomplete"
+)
+
+const (
+	maxDepth = 8
+	maxPaths = 32
+)
+
+// Options control analysis.
+type Options struct {
+	Host         string
+	Now          time.Time
+	ExpiringSoon time.Duration
+	Store        *truststore.Store
+	Pending      map[string]config.PendingDistrust
+}
+
+// Path is one issuance path from the leaf upward.
+type Path struct {
+	Nodes         []string `json:"nodes"` // CertInfo IDs, leaf first
+	Terminal      string   `json:"terminal"`
+	MissingIssuer string   `json:"missingIssuer,omitempty"` // for incomplete paths
+	Trusted       bool     `json:"trusted"`                 // ends at a Mozilla root
+	TimeValid     bool     `json:"timeValid"`               // every cert in validity window
+	Pending       bool     `json:"pendingDistrust"`         // passes through a pending-distrust CA
+	Best          bool     `json:"best"`
+}
+
+// Check is one summary card.
+type Check struct {
+	ID     string   `json:"id"`
+	Title  string   `json:"title"`
+	Status string   `json:"status"`
+	Detail string   `json:"detail"`
+	Items  []string `json:"items,omitempty"`
+}
+
+// Result is the full analysis for one presented chain.
+type Result struct {
+	Chain      []CertInfo `json:"chain"`      // as presented, in order
+	StoreRoots []CertInfo `json:"storeRoots"` // Mozilla roots used but not sent
+	Paths      []Path     `json:"paths"`
+	Checks     []Check    `json:"checks"`
+	Overall    string     `json:"overall"`
+	Mermaid    string     `json:"mermaid"`
+}
+
+type node struct {
+	cert *x509.Certificate
+	info *CertInfo
+}
+
+type analyzer struct {
+	o        Options
+	nodes    map[string]*node // by SHA-256
+	ids      map[string]string
+	order    []string // presented unique fingerprints in order
+	store    []*CertInfo
+	paths    []Path
+	sigCache map[[2]string]bool
+}
+
+// Analyze runs every check against the presented chain.
+func Analyze(presented []*x509.Certificate, o Options) *Result {
+	if o.Now.IsZero() {
+		o.Now = time.Now()
+	}
+	a := &analyzer{o: o, nodes: map[string]*node{}, ids: map[string]string{}, sigCache: map[[2]string]bool{}}
+	res := &Result{}
+
+	firstIdx := map[string]int{}
+	for i, c := range presented {
+		fp := truststore.FingerprintSHA256(c)
+		ci := describe(c, fmt.Sprintf("c%d", i), i, "presented", o)
+		if j, dup := firstIdx[fp]; dup {
+			ci.ID = res.Chain[j].ID
+			ci.Extraneous = "duplicate"
+			ci.DuplicateOf = j
+			res.Chain = append(res.Chain, ci)
+			continue
+		}
+		firstIdx[fp] = i
+		res.Chain = append(res.Chain, ci)
+		a.order = append(a.order, fp)
+	}
+	for _, fp := range a.order {
+		ci := &res.Chain[firstIdx[fp]]
+		a.nodes[fp] = &node{cert: presented[firstIdx[fp]], info: ci}
+		a.ids[fp] = ci.ID
+	}
+	if len(presented) == 0 {
+		res.Checks = []Check{{ID: "chain", Title: "Certificate chain", Status: Fail, Detail: "The server presented no certificates."}}
+		res.Overall = Fail
+		return res
+	}
+
+	a.walk([]string{a.order[0]}, map[string]bool{a.order[0]: true})
+	a.scorePaths()
+	res.Paths = a.paths
+	a.markUsage(res)
+	res.Checks = a.checks(res)
+	for _, c := range res.Checks {
+		res.Overall = Worst(res.Overall, c.Status)
+	}
+	if res.Overall == "" {
+		res.Overall = Pass
+	}
+	res.Mermaid = a.mermaid(res)
+	return res
+}
+
+func (a *analyzer) verifies(child, parent *x509.Certificate) bool {
+	k := [2]string{truststore.FingerprintSHA256(child), truststore.FingerprintSHA256(parent)}
+	if v, ok := a.sigCache[k]; ok {
+		return v
+	}
+	v := string(child.RawIssuer) == string(parent.RawSubject) &&
+		parent.CheckSignature(child.SignatureAlgorithm, child.RawTBSCertificate, child.Signature) == nil
+	a.sigCache[k] = v
+	return v
+}
+
+// issuers returns fingerprints of certs (presented first, then store roots)
+// that verifiably signed fp.
+func (a *analyzer) issuers(fp string) []string {
+	child := a.nodes[fp].cert
+	var out []string
+	for _, cand := range a.order {
+		if cand != fp && a.verifies(child, a.nodes[cand].cert) {
+			out = append(out, cand)
+		}
+	}
+	if a.o.Store == nil {
+		return out
+	}
+	for _, r := range a.o.Store.CandidateIssuers(child) {
+		rfp := truststore.FingerprintSHA256(r)
+		if rfp == fp || contains(out, rfp) || !a.verifies(child, r) {
+			continue
+		}
+		if _, known := a.nodes[rfp]; !known {
+			ci := describe(r, fmt.Sprintf("r%d", len(a.store)), -1, "mozilla_store", a.o)
+			a.store = append(a.store, &ci)
+			a.nodes[rfp] = &node{cert: r, info: &ci}
+			a.ids[rfp] = ci.ID
+		}
+		out = append(out, rfp)
+	}
+	return out
+}
+
+func contains(s []string, v string) bool {
+	for _, x := range s {
+		if x == v {
+			return true
+		}
+	}
+	return false
+}
+
+func (a *analyzer) emit(p Path) {
+	if len(a.paths) < maxPaths {
+		a.paths = append(a.paths, p)
+	}
+}
+
+func (a *analyzer) walk(chain []string, seen map[string]bool) {
+	if len(a.paths) >= maxPaths {
+		return
+	}
+	fp := chain[len(chain)-1]
+	n := a.nodes[fp]
+	ids := func() []string {
+		out := make([]string, len(chain))
+		for i, f := range chain {
+			out[i] = a.ids[f]
+		}
+		return out
+	}
+	if n.info.InMozilla {
+		a.emit(Path{Nodes: ids(), Terminal: TermMozillaRoot})
+		return
+	}
+	if n.info.SelfSigned {
+		a.emit(Path{Nodes: ids(), Terminal: TermUntrustedRoot})
+		return
+	}
+	if len(chain) >= maxDepth {
+		a.emit(Path{Nodes: ids(), Terminal: TermIncomplete, MissingIssuer: n.info.Issuer + " (max depth reached)"})
+		return
+	}
+	extended := false
+	for _, iss := range a.issuers(fp) {
+		if seen[iss] {
+			continue
+		}
+		extended = true
+		seen[iss] = true
+		a.walk(append(append([]string{}, chain...), iss), seen)
+		delete(seen, iss)
+	}
+	if !extended {
+		a.emit(Path{Nodes: ids(), Terminal: TermIncomplete, MissingIssuer: n.info.Issuer})
+	}
+}
+
+func (a *analyzer) info(id string) *CertInfo {
+	for _, n := range a.nodes {
+		if n.info.ID == id {
+			return n.info
+		}
+	}
+	return nil
+}
+
+func timeOK(s string) bool { return s == StatusValid || s == StatusExpiringSoon }
+
+func (a *analyzer) scorePaths() {
+	for i := range a.paths {
+		p := &a.paths[i]
+		p.Trusted = p.Terminal == TermMozillaRoot
+		p.TimeValid = true
+		for _, id := range p.Nodes {
+			ci := a.info(id)
+			if !timeOK(ci.Status) {
+				p.TimeValid = false
+			}
+			if ci.PendingDistrust != nil {
+				p.Pending = true
+			}
+		}
+	}
+	// Best path: trusted, time-valid, not pending, shortest; stable by discovery.
+	score := func(p Path) int {
+		s := 0
+		if p.Trusted {
+			s += 8
+		}
+		if p.TimeValid {
+			s += 4
+		}
+		if !p.Pending {
+			s += 2
+		}
+		return s
+	}
+	best := -1
+	for i, p := range a.paths {
+		if best < 0 || score(p) > score(a.paths[best]) ||
+			(score(p) == score(a.paths[best]) && len(p.Nodes) < len(a.paths[best].Nodes)) {
+			best = i
+		}
+	}
+	if best >= 0 {
+		a.paths[best].Best = true
+	}
+	sort.SliceStable(a.paths, func(i, j int) bool {
+		if a.paths[i].Best != a.paths[j].Best {
+			return a.paths[i].Best
+		}
+		return score(a.paths[i]) > score(a.paths[j])
+	})
+}
+
+func (a *analyzer) bestPath() *Path {
+	for i := range a.paths {
+		if a.paths[i].Best {
+			return &a.paths[i]
+		}
+	}
+	return nil
+}
+
+// markUsage sets OnTrustedPath and Extraneous on presented certs.
+func (a *analyzer) markUsage(res *Result) {
+	onTrusted, onAny := map[string]bool{}, map[string]bool{}
+	for _, p := range a.paths {
+		for _, id := range p.Nodes {
+			onAny[id] = true
+			if p.Trusted {
+				onTrusted[id] = true
+			}
+		}
+	}
+	anyTrusted := len(onTrusted) > 0
+	mark := func(ci *CertInfo) {
+		ci.OnTrustedPath = onTrusted[ci.ID]
+		if ci.Index == 0 || ci.Extraneous == "duplicate" {
+			return
+		}
+		switch {
+		case anyTrusted && !onTrusted[ci.ID] && onAny[ci.ID]:
+			ci.Extraneous = "alternate_path"
+		case !onAny[ci.ID]:
+			ci.Extraneous = "unrelated"
+		}
+	}
+	for i := range res.Chain {
+		mark(&res.Chain[i])
+	}
+	for _, s := range a.store {
+		s.OnTrustedPath = onTrusted[s.ID]
+	}
+	res.StoreRoots = res.StoreRoots[:0]
+	for _, s := range a.store {
+		res.StoreRoots = append(res.StoreRoots, *s)
+	}
+}
+
+func label(ci CertInfo) string {
+	if ci.Index >= 0 {
+		return fmt.Sprintf("#%d %s", ci.Index, ci.SubjectCN)
+	}
+	return ci.SubjectCN + " (Mozilla store)"
+}
+
+func (a *analyzer) checks(res *Result) []Check {
+	var out []Check
+	best := a.bestPath()
+	leaf := res.Chain[0]
+
+	// 1. Mozilla root
+	{
+		c := Check{ID: "mozilla_root", Title: "Chains to a Mozilla-trusted root"}
+		var trusted []string
+		terms := map[string]int{}
+		for _, p := range a.paths {
+			terms[p.Terminal]++
+			if p.Trusted {
+				last := a.info(p.Nodes[len(p.Nodes)-1])
+				trusted = appendUnique(trusted, last.SubjectCN)
+			}
+		}
+		if len(trusted) > 0 {
+			c.Status = Pass
+			c.Detail = fmt.Sprintf("%d of %d path(s) terminate at a root in the Mozilla store.", countTrusted(a.paths), len(a.paths))
+			c.Items = trusted
+		} else {
+			c.Status = Fail
+			switch {
+			case terms[TermUntrustedRoot] > 0:
+				c.Detail = "The chain terminates at a self-signed root that is not in the Mozilla store."
+			default:
+				c.Detail = "No issuer could be found for the top of the chain (incomplete chain — a required intermediate is probably missing)."
+			}
+			for _, p := range a.paths {
+				if p.MissingIssuer != "" {
+					c.Items = appendUnique(c.Items, "Missing issuer: "+p.MissingIssuer)
+				}
+			}
+		}
+		out = append(out, c)
+	}
+
+	// 2. Order
+	{
+		c := Check{ID: "order", Title: "Certificates in correct order"}
+		if leaf.IsCA {
+			c.Status = Warn
+			c.Detail = "The first certificate is a CA certificate; the server's end-entity certificate must be sent first."
+		}
+		if best != nil {
+			// The presented certs on the best path must appear at the front, in path order.
+			var want []string
+			for _, id := range best.Nodes {
+				if ci := a.info(id); ci.Index >= 0 {
+					want = append(want, id)
+				}
+			}
+			var got []string
+			for _, ci := range res.Chain {
+				if ci.Extraneous == "" {
+					got = append(got, ci.ID)
+				}
+			}
+			ok := len(got) >= len(want)
+			for i := 0; ok && i < len(want); i++ {
+				if got[i] != want[i] {
+					ok = false
+				}
+			}
+			// And each presented cert on the path must sit immediately before its issuer in the raw chain.
+			pos := map[string]int{}
+			for _, ci := range res.Chain {
+				if _, seen := pos[ci.ID]; !seen {
+					pos[ci.ID] = ci.Index
+				}
+			}
+			for i := 0; ok && i+1 < len(want); i++ {
+				if pos[want[i+1]] != pos[want[i]]+1 {
+					ok = false
+				}
+			}
+			if ok && c.Status == "" {
+				c.Status = Pass
+				c.Detail = "Each certificate is immediately followed by its issuer."
+			} else if !ok {
+				c.Status = Fail
+				c.Detail = "The certificates are not sent in issuance order. Expected order:"
+				for _, id := range want {
+					ci := a.info(id)
+					c.Items = append(c.Items, fmt.Sprintf("%s (currently position #%d)", ci.SubjectCN, ci.Index))
+				}
+			}
+		}
+		out = append(out, c)
+	}
+
+	// 3. Validity
+	{
+		c := Check{ID: "validity", Title: "Certificates within validity period", Status: Pass}
+		scope := map[string]bool{}
+		if best != nil {
+			for _, id := range best.Nodes {
+				scope[id] = true
+			}
+		}
+		all := append(append([]CertInfo{}, res.Chain...), res.StoreRoots...)
+		seen := map[string]bool{}
+		for _, ci := range all {
+			if seen[ci.ID] {
+				continue
+			}
+			seen[ci.ID] = true
+			critical := scope[ci.ID] || ci.Index == 0
+			switch ci.Status {
+			case StatusExpired, StatusNotYetValid:
+				word := "expired " + ci.NotAfter.Format("2006-01-02")
+				if ci.Status == StatusNotYetValid {
+					word = "not valid until " + ci.NotBefore.Format("2006-01-02")
+				}
+				if critical {
+					c.Status = Worst(c.Status, Fail)
+					c.Items = append(c.Items, fmt.Sprintf("%s — %s", label(ci), word))
+				} else {
+					c.Status = Worst(c.Status, Warn)
+					c.Items = append(c.Items, fmt.Sprintf("%s — %s (not on the best path)", label(ci), word))
+				}
+			case StatusExpiringSoon:
+				c.Status = Worst(c.Status, Warn)
+				c.Items = append(c.Items, fmt.Sprintf("%s — expires in %d day(s) (%s)", label(ci), ci.DaysRemaining, ci.NotAfter.Format("2006-01-02")))
+			}
+		}
+		switch c.Status {
+		case Pass:
+			c.Detail = "Every certificate is currently valid."
+		case Warn:
+			c.Detail = "Some certificates expire soon or are out of date off the best path."
+		case Fail:
+			c.Detail = "A certificate needed by the chain is expired or not yet valid."
+		}
+		out = append(out, c)
+	}
+
+	// 4. Extra CAs
+	{
+		c := Check{ID: "extra_certs", Title: "No unnecessary certificates", Status: Pass, Detail: "Every certificate sent is used by the trusted path."}
+		if countTrusted(a.paths) == 0 {
+			c.Detail = "Every certificate sent is on the leaf's issuance path."
+		}
+		for _, ci := range res.Chain {
+			switch ci.Extraneous {
+			case "unrelated":
+				c.Status = Worst(c.Status, Fail)
+				c.Items = append(c.Items, fmt.Sprintf("%s — not related to the leaf's issuance path", label(ci)))
+			case "duplicate":
+				c.Status = Worst(c.Status, Warn)
+				c.Items = append(c.Items, fmt.Sprintf("%s — duplicate of position #%d", label(ci), ci.DuplicateOf))
+			case "alternate_path":
+				c.Status = Worst(c.Status, Warn)
+				c.Items = append(c.Items, fmt.Sprintf("%s — only on a non-Mozilla path (cross-sign for legacy clients?)", label(ci)))
+			}
+		}
+		if c.Status != Pass {
+			c.Detail = "The server sends certificates that are not needed to reach a Mozilla root."
+		}
+		out = append(out, c)
+	}
+
+	// 5. Root sent
+	for _, ci := range res.Chain {
+		if ci.Index > 0 && ci.SelfSigned && ci.Extraneous == "" {
+			out = append(out, Check{ID: "root_sent", Title: "Root certificate sent", Status: Info,
+				Detail: "The server sends its self-signed root. Clients already have trusted roots, so this only wastes bytes in the handshake.",
+				Items:  []string{label(ci)}})
+			break
+		}
+	}
+
+	// 6. Pending distrust
+	{
+		c := Check{ID: "pending_distrust", Title: "No CAs pending loss of trust", Status: Pass, Detail: "No certificate on a trusted path is flagged."}
+		trustedPaths, pendingPaths := 0, 0
+		flagged := map[string]bool{}
+		for _, p := range a.paths {
+			if !p.Trusted {
+				continue
+			}
+			trustedPaths++
+			if p.Pending {
+				pendingPaths++
+			}
+			for _, id := range p.Nodes {
+				ci := a.info(id)
+				if ci.PendingDistrust != nil && !flagged[id] {
+					flagged[id] = true
+					item := label(*ci)
+					if ci.PendingDistrust.Date != "" {
+						item += " — distrust " + ci.PendingDistrust.Date
+					}
+					if ci.PendingDistrust.Note != "" {
+						item += " (" + ci.PendingDistrust.Note + ")"
+					}
+					c.Items = append(c.Items, item)
+				}
+			}
+		}
+		if pendingPaths > 0 {
+			c.Status = Warn
+			if pendingPaths == trustedPaths {
+				c.Detail = "Every trusted path goes through a CA that is scheduled to lose trust. Plan a migration to another CA hierarchy."
+			} else {
+				c.Detail = fmt.Sprintf("%d of %d trusted path(s) go through a CA scheduled to lose trust; other paths are unaffected.", pendingPaths, trustedPaths)
+			}
+		}
+		out = append(out, c)
+	}
+
+	// 7. Hostname
+	if a.o.Host != "" {
+		c := Check{ID: "hostname", Title: "Leaf certificate matches hostname"}
+		leafCert := a.nodes[a.order[0]].cert
+		if err := leafCert.VerifyHostname(a.o.Host); err != nil {
+			c.Status = Fail
+			c.Detail = err.Error()
+		} else {
+			c.Status = Pass
+			c.Detail = fmt.Sprintf("%q is covered by the leaf certificate.", a.o.Host)
+		}
+		out = append(out, c)
+	}
+	return out
+}
+
+func countTrusted(ps []Path) int {
+	n := 0
+	for _, p := range ps {
+		if p.Trusted {
+			n++
+		}
+	}
+	return n
+}
+
+func appendUnique(s []string, v string) []string {
+	if contains(s, v) {
+		return s
+	}
+	return append(s, v)
+}
+
+// mermaidEscape makes a string safe inside a quoted Mermaid label.
+func mermaidEscape(s string) string {
+	r := strings.NewReplacer(`"`, "#quot;", "<", "#lt;", ">", "#gt;", "&", "#amp;", "`", "#96;", "\n", " ", "|", "#124;", "[", "#91;", "]", "#93;", "{", "#123;", "}", "#125;")
+	return r.Replace(s)
+}
+
+func (a *analyzer) mermaid(res *Result) string {
+	var b strings.Builder
+	b.WriteString("flowchart TD\n")
+	all := append([]CertInfo{}, res.Chain...)
+	all = append(all, res.StoreRoots...)
+	declared := map[string]bool{}
+	for _, ci := range all {
+		if declared[ci.ID] || ci.Extraneous == "duplicate" {
+			continue
+		}
+		declared[ci.ID] = true
+		where := fmt.Sprintf("sent #%d", ci.Index)
+		if ci.Index < 0 {
+			where = "Mozilla store (not sent)"
+		}
+		extra := ""
+		switch {
+		case ci.InMozilla:
+			extra = "<br/>✔ Mozilla root"
+		case ci.SelfSigned:
+			extra = "<br/>✖ untrusted root"
+		}
+		if ci.PendingDistrust != nil {
+			extra += "<br/>⚠ pending distrust"
+		}
+		if ci.Status == StatusExpired || ci.Status == StatusNotYetValid {
+			extra += "<br/>✖ " + strings.ReplaceAll(ci.Status, "_", " ")
+		}
+		if ci.Extraneous == "unrelated" {
+			extra += "<br/>✖ unrelated"
+		}
+		fmt.Fprintf(&b, "  %s[\"%s<br/><small>%s · %s…</small>%s\"]\n",
+			ci.ID, mermaidEscape(ci.SubjectCN), where, ci.SHA256[:12], extra)
+		cls := "cert"
+		switch {
+		case ci.Status == StatusExpired || ci.Status == StatusNotYetValid || ci.Extraneous == "unrelated":
+			cls = "bad"
+		case ci.PendingDistrust != nil || ci.Extraneous == "alternate_path":
+			cls = "warn"
+		case ci.Index < 0:
+			cls = "store"
+		case ci.OnTrustedPath:
+			cls = "trusted"
+		}
+		fmt.Fprintf(&b, "  class %s %s\n", ci.ID, cls)
+	}
+
+	type edge struct{ from, to string }
+	edges := map[edge]int{}
+	var order []edge
+	trustedEdge := map[edge]bool{}
+	missing := 0
+	for _, p := range a.paths {
+		for i := 0; i+1 < len(p.Nodes); i++ {
+			e := edge{p.Nodes[i], p.Nodes[i+1]}
+			if _, ok := edges[e]; !ok {
+				edges[e] = len(order)
+				order = append(order, e)
+			}
+			if p.Trusted {
+				trustedEdge[e] = true
+			}
+		}
+		if p.Terminal == TermIncomplete {
+			id := fmt.Sprintf("m%d", missing)
+			missing++
+			fmt.Fprintf(&b, "  %s[\"Missing issuer:<br/>%s\"]\n  class %s missing\n", id, mermaidEscape(p.MissingIssuer), id)
+			e := edge{p.Nodes[len(p.Nodes)-1], id}
+			edges[e] = len(order)
+			order = append(order, e)
+		}
+	}
+	for _, e := range order {
+		arrow := "-->"
+		if strings.HasPrefix(e.to, "m") {
+			arrow = "-.->"
+		}
+		fmt.Fprintf(&b, "  %s %s|issued by| %s\n", e.from, arrow, e.to)
+	}
+	for i, e := range order {
+		if trustedEdge[e] {
+			fmt.Fprintf(&b, "  linkStyle %d stroke:#1a7f37,stroke-width:3px\n", i)
+		}
+	}
+	b.WriteString("  classDef cert fill:#eef2f7,stroke:#64748b,color:#0f172a\n")
+	b.WriteString("  classDef trusted fill:#dcfce7,stroke:#1a7f37,color:#052e16\n")
+	b.WriteString("  classDef store fill:#dcfce7,stroke:#1a7f37,color:#052e16,stroke-dasharray:5 4\n")
+	b.WriteString("  classDef warn fill:#fef3c7,stroke:#b45309,color:#451a03\n")
+	b.WriteString("  classDef bad fill:#fee2e2,stroke:#b91c1c,color:#450a0a\n")
+	b.WriteString("  classDef missing fill:#fff5f5,stroke:#b91c1c,color:#450a0a,stroke-dasharray:5 4\n")
+	return b.String()
+}
