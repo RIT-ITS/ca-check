@@ -98,6 +98,7 @@
     if (!host) return showFormError("Enter a hostname or IP address to check.");
     if (!Number.isInteger(port) || port < 1 || port > 65535) return showFormError("Port must be a whole number from 1 to 65535.");
     const body = { host, port };
+    if (starttls) body.starttls = starttls;
     const ips = (ipsEl.value || "").split(/[\s,]+/).filter(Boolean);
     if (ips.length && !$("#advanced").hidden) body.connectIPs = ips;
 
@@ -123,7 +124,8 @@
       const url = new URL(location.href);
       url.searchParams.set("host", host);
       url.searchParams.set("port", String(port));
-      history.replaceState(null, "", url);
+      if (starttls) url.searchParams.set("starttls", starttls); else url.searchParams.delete("starttls");
+      saveHistory(url, data);
       await render(data);
     } catch (e) {
       results.replaceChildren(h("div", { class: "sheet notice fail reveal" },
@@ -247,9 +249,10 @@
     panel.append(h("dl", { class: "meta" },
       metaItem("IP address", res.ip, true), metaItem("Protocol", t.version),
       metaItem("Cipher suite", t.cipherSuite, true, true), metaItem("ALPN", t.alpn || "none"),
-      metaItem("Handshake", `${t.handshakeMs} ms`)));
+      metaItem("Handshake", `${t.handshakeMs} ms`),
+      t.starttls ? metaItem("STARTTLS", protoName(t.starttls)) : null));
 
-    panel.append(interpretation(a, host));
+    panel.append(interpretation(a, host, t.starttls));
     panel.append(resultTable(a));
     panel.append(validitySection(a));
     panel.append(chainSection(a));
@@ -264,7 +267,7 @@
   }
 
   // ---------- interpretation: verdict + fixes ----------
-  function interpretation(a, host) {
+  function interpretation(a, host, viaStartTLS) {
     const checks = Object.fromEntries(a.checks.map((c) => [c.id, c]));
     const fixes = [];
     const add = (status, text, items) => fixes.push({ status, text, items });
@@ -307,7 +310,7 @@
     fixes.sort((x, y) => ({ fail: 0, warn: 1, info: 2 })[x.status] - ({ fail: 0, warn: 1, info: 2 })[y.status]);
     const copyLabel = h("span", {}, "Copy summary");
     const copyBtn = h("button", { class: "btn-quiet", type: "button", onclick: async () => {
-      try { await navigator.clipboard.writeText(summaryText(a, host, verdict, fixes)); copyLabel.textContent = "Copied"; }
+      try { await navigator.clipboard.writeText(summaryText(a, host, viaStartTLS, verdict, fixes)); copyLabel.textContent = "Copied"; }
       catch { copyLabel.textContent = "Copy failed"; }
       setTimeout(() => { copyLabel.textContent = "Copy summary"; }, 1600);
     } }, icon("copy"), copyLabel);
@@ -322,8 +325,9 @@
         : h("p", { style: "margin:8px 0 0" }, "Every test passed. Nothing needs to change."));
   }
 
-  function summaryText(a, host, verdict, fixes) {
+  function summaryText(a, host, viaStartTLS, verdict, fixes) {
     const lines = [`CA Chain Check: ${host}`, `Verdict: ${verdict}`];
+    if (viaStartTLS) lines.splice(1, 0, `Connection: STARTTLS (${protoName(viaStartTLS)})`);
     if (fixes.length) {
       lines.push("", "Fixes:");
       fixes.forEach((f, i) => {
@@ -616,11 +620,56 @@
     return s;
   }
 
-  // ---------- boot ----------
-  const params = new URLSearchParams(location.search);
-  if (params.get("host")) {
-    hostEl.value = params.get("host");
-    if (params.get("port")) portEl.value = params.get("port");
+  const PROTO_NAMES = { smtp: "SMTP", imap: "IMAP", pop3: "POP3", ftp: "FTP", ldap: "LDAP", postgres: "PostgreSQL" };
+  const protoName = (p) => PROTO_NAMES[p] || p.toUpperCase();
+
+  // ---------- history ----------
+  // Each check gets its own history entry holding its results, so Back and
+  // Forward show earlier checks again without re-running them. A link that
+  // only carries host/port fills in the form and does not run a check.
+  function saveHistory(url, data) {
+    const state = { data };
+    const title = `${url.searchParams.get("host")}:${url.searchParams.get("port")} | CA Chain Check`;
+    const same = url.href === location.href; // re-checking the same target: update, don't stack
+    try {
+      if (same) history.replaceState(state, "", url); else history.pushState(state, "", url);
+    } catch {
+      // The browser may refuse a large state; keep the entry, drop the stored results.
+      if (same) history.replaceState(null, "", url); else history.pushState(null, "", url);
+    }
+    document.title = title;
   }
-  renderIntro();
+
+  function loadFromURL() {
+    const params = new URLSearchParams(location.search);
+    hostEl.value = params.get("host") || "";
+    portEl.value = params.get("port") || "443";
+    starttls = (params.get("starttls") || "").toLowerCase();
+  }
+
+  window.addEventListener("popstate", (ev) => {
+    loadFromURL();
+    const data = ev.state && ev.state.data;
+    if (data) {
+      document.title = `${hostEl.value}:${portEl.value} | CA Chain Check`;
+      renderStoreInfo(data.trustStore);
+      render(data);
+    } else {
+      document.title = "CA Chain Check";
+      renderIntro();
+    }
+  });
+
+  // ---------- boot ----------
+  // starttls is a URL-only option (no form control): a protocol name, or
+  // "none" for TLS only. Without it the server picks by port.
+  let starttls = "";
+  loadFromURL();
+  if (history.state && history.state.data) {
+    // Reloaded or restored page: show the stored result again.
+    document.title = `${hostEl.value}:${portEl.value} | CA Chain Check`;
+    render(history.state.data);
+  } else {
+    renderIntro();
+  }
 })();

@@ -44,7 +44,8 @@ func (s *Server) Handler() http.Handler {
 	themeCSS := []byte(theme.CSS(s.Cfg.Theme))
 	favicon := theme.Favicon(s.Cfg.Theme)
 	ver := assetVersion(s.Static, themeCSS)
-	index := versionedIndex(s.Static, ver)
+	index := versionedPage(s.Static, "index.html", ver)
+	help := versionedPage(s.Static, "help.html", ver)
 	mux.HandleFunc("GET /theme.css", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/css; charset=utf-8")
 		cacheFor(w, r)
@@ -59,6 +60,11 @@ func (s *Server) Handler() http.Handler {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-cache")
 		_, _ = w.Write(index)
+	})
+	mux.HandleFunc("GET /help", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-cache")
+		_, _ = w.Write(help)
 	})
 	files := http.FileServerFS(s.Static)
 	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
@@ -145,8 +151,8 @@ func (s *Server) check(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	resp := s.Prober.Run(ctx, client, host, req.Port, ips, res)
-	slog.Info("check", "client", client, "host", host, "port", req.Port, "ips", len(ips), "source", res.Source)
+	resp := s.Prober.Run(ctx, client, host, req.Port, req.StartTLS, req.Fallback, ips, res)
+	slog.Info("check", "client", client, "host", host, "port", req.Port, "ips", len(ips), "source", res.Source, "starttls", req.StartTLS, "fallback", req.Fallback)
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -181,14 +187,14 @@ func assetVersion(static fs.FS, extra ...[]byte) string {
 	return hex.EncodeToString(h.Sum(nil))[:12]
 }
 
-// versionedIndex rewrites the asset references in index.html to carry ?v=.
-func versionedIndex(static fs.FS, ver string) []byte {
-	b, err := fs.ReadFile(static, "index.html")
+// versionedPage rewrites the asset references in an HTML page to carry ?v=.
+func versionedPage(static fs.FS, name, ver string) []byte {
+	b, err := fs.ReadFile(static, name)
 	if err != nil {
-		return []byte("index.html missing")
+		return []byte(name + " missing")
 	}
 	out := string(b)
-	for _, a := range []string{"styles.css", "theme.css", "app.js", "favicon.svg", "vendor/mermaid.min.js"} {
+	for _, a := range []string{"styles.css", "theme.css", "app.js", "help.js", "favicon.svg", "vendor/mermaid.min.js"} {
 		out = strings.ReplaceAll(out, `="`+a+`"`, `="`+a+"?v="+ver+`"`)
 	}
 	return []byte(out)

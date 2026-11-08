@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>API help | CA Chain Check</title>
+  <meta name="description" content="How to use the CA Chain Check API to check a server's TLS certificate chain from scripts.">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="fonts/PublicSans-Variable.ttf?v=1" as="font" type="font/ttf" crossorigin>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="theme.css">
+  <script src="help.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#doc">Skip to content</a>
+  <header class="bar">
+    <div class="wrap">
+      <div class="brand doc-brand">
+        <a class="brand-name" href="./">CA Chain Check</a>
+        <span class="brand-sub">API help</span>
+      </div>
+    </div>
+  </header>
+
+  <main id="doc" class="wrap" tabindex="-1">
+    <article class="sheet doc">
+      <h1>Using the API</h1>
+      <p>CA Chain Check has a small JSON API. The web page uses the same API, so anything the page shows is also in the API response.</p>
+
+      <nav aria-label="On this page">
+        <ul class="doc-toc">
+          <li><a href="#check">Check a server</a></li>
+          <li><a href="#starttls">STARTTLS</a></li>
+          <li><a href="#response">Response</a></li>
+          <li><a href="#errors">Errors and limits</a></li>
+          <li><a href="#other">Other endpoints</a></li>
+          <li><a href="#links">Links to the web page</a></li>
+        </ul>
+      </nav>
+
+      <h2 id="check">Check a server</h2>
+      <p>Send a <code>POST</code> to <code><span data-origin>https://this-server</span>/api/check</code> with a JSON body:</p>
+      <pre class="code"><code>curl -s <span data-origin>https://this-server</span>/api/check \
+  -H 'Content-Type: application/json' \
+  -d '{"host": "www.example.edu", "port": 443}'</code></pre>
+
+      <table class="params">
+        <thead><tr><th scope="col">Field</th><th scope="col">Required</th><th scope="col">Meaning</th></tr></thead>
+        <tbody>
+          <tr><td><code>host</code></td><td>Yes</td><td>Hostname or IP address. The hostname is sent as SNI.</td></tr>
+          <tr><td><code>port</code></td><td>No</td><td>TCP port. Defaults to 443, or to the protocol's usual port when <code>starttls</code> names one.</td></tr>
+          <tr><td><code>starttls</code></td><td>No</td><td><code>smtp</code>, <code>imap</code>, <code>pop3</code>, <code>ftp</code>, <code>ldap</code>, <code>postgres</code>, or <code>none</code>. See <a href="#starttls">STARTTLS</a>.</td></tr>
+          <tr><td><code>connectIPs</code></td><td>No</td><td>List of IP addresses to connect to instead of looking up the hostname, like <code>curl --resolve</code>. The hostname is still sent as SNI. This server may turn this off; <code>GET /api/config</code> says whether you can use it.</td></tr>
+        </tbody>
+      </table>
+      <p>Every IP address the hostname resolves to is tested on its own. The body must be JSON, under 4 KB, with no other fields.</p>
+
+      <h2 id="starttls">STARTTLS</h2>
+      <p>Mail, directory and database servers often start in plain text and switch to TLS when asked. That switch is called STARTTLS.</p>
+      <ul>
+        <li><strong>Automatic:</strong> on ports 21 (FTP), 25 and 587 (SMTP), 110 (POP3), 143 (IMAP), 389 (LDAP) and 5432 (PostgreSQL), the check tries TLS first. If the TLS handshake fails, it reconnects and tries STARTTLS for that protocol.</li>
+        <li><strong>Named:</strong> <code>"starttls": "smtp"</code> uses STARTTLS straight away, on any port. Use this for servers on other ports, such as SMTP on 2525.</li>
+        <li><strong>Off:</strong> <code>"starttls": "none"</code> uses TLS only, even on the ports above.</li>
+      </ul>
+      <p>When STARTTLS was used, the result for that IP has <code>tls.starttls</code> set to the protocol name.</p>
+      <pre class="code"><code>curl -s <span data-origin>https://this-server</span>/api/check \
+  -H 'Content-Type: application/json' \
+  -d '{"host": "smtp.example.edu", "port": 587}'</code></pre>
+
+      <h2 id="response">Response</h2>
+      <p>A successful check returns HTTP 200 with JSON like this (shortened):</p>
+      <pre class="code"><code>{
+  "host": "www.example.edu",
+  "port": 443,
+  "checkedAt": "2026-11-08T20:16:00Z",
+  "resolution": { "source": "dns", "ips": ["192.0.2.10", "192.0.2.11"] },
+  "results": [
+    {
+      "ip": "192.0.2.10",
+      "tested": true,
+      "overall": "pass",
+      "tls": { "version": "TLS 1.3", "cipherSuite": "TLS_AES_128_GCM_SHA256", "sni": "www.example.edu", "handshakeMs": 42 },
+      "analysis": {
+        "overall": "pass",
+        "checks": [ { "id": "order", "title": "Certificates in correct order", "status": "pass", "detail": "..." } ],
+        "chain": [ { "index": 0, "subjectCN": "www.example.edu", "sha256": "...", "pem": "..." } ],
+        "storeRoots": [ ... ],
+        "paths": [ { "nodes": ["c0", "c1", "r0"], "terminal": "mozilla_root", "trusted": true, "best": true } ],
+        "mermaid": "flowchart TD ..."
+      }
+    }
+  ],
+  "consistency": { "status": "pass", "detail": "..." },
+  "trustStore": { "count": 118, "loadedAt": "..." }
+}</code></pre>
+
+      <h3>Fields you will use most</h3>
+      <table class="params">
+        <thead><tr><th scope="col">Field</th><th scope="col">Meaning</th></tr></thead>
+        <tbody>
+          <tr><td><code>results[].overall</code></td><td>Worst status for that IP: <code>pass</code>, <code>warn</code>, <code>fail</code> or <code>info</code>.</td></tr>
+          <tr><td><code>results[].error</code></td><td>Set when the connection, STARTTLS or TLS handshake failed. There is no <code>analysis</code> then.</td></tr>
+          <tr><td><code>results[].denyReason</code></td><td>Set when this server's policy does not allow testing that IP, for example a private address.</td></tr>
+          <tr><td><code>results[].analysis.checks[]</code></td><td>One entry per test, with <code>id</code>, <code>status</code>, <code>detail</code> and sometimes <code>items</code> (the certificates involved).</td></tr>
+          <tr><td><code>results[].analysis.chain[]</code></td><td>The certificates in the order the server sent them, with subject, issuer, dates, fingerprints and PEM.</td></tr>
+          <tr><td><code>results[].analysis.storeRoots[]</code></td><td>Roots from the trust store that complete a path but were not sent.</td></tr>
+          <tr><td><code>results[].analysis.paths[]</code></td><td>Every path from the leaf to a root, listed by certificate <code>id</code>. <code>terminal</code> is <code>mozilla_root</code> (a root in the trust store), <code>untrusted_root</code> or <code>incomplete</code>.</td></tr>
+          <tr><td><code>consistency</code></td><td>Whether all tested IPs sent the same chain.</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Check IDs</h3>
+      <table class="params">
+        <thead><tr><th scope="col">ID</th><th scope="col">Test</th></tr></thead>
+        <tbody>
+          <tr><td><code>mozilla_root</code></td><td>At least one path ends at a root in the trust store.</td></tr>
+          <tr><td><code>order</code></td><td>Each certificate is followed by its issuer.</td></tr>
+          <tr><td><code>validity</code></td><td>Certificates on the path are within their dates.</td></tr>
+          <tr><td><code>extra_certs</code></td><td>No certificates that aren't needed.</td></tr>
+          <tr><td><code>pending_distrust</code></td><td>No CA on the path is scheduled to lose trust.</td></tr>
+          <tr><td><code>hostname</code></td><td>The leaf certificate covers the hostname.</td></tr>
+          <tr><td><code>root_sent</code></td><td>Note only: the server sends its root.</td></tr>
+        </tbody>
+      </table>
+
+      <p>For example, to list the result for each IP with <code>jq</code>:</p>
+      <pre class="code"><code>curl -s <span data-origin>https://this-server</span>/api/check \
+  -H 'Content-Type: application/json' \
+  -d '{"host": "www.example.edu"}' \
+  | jq '.results[] | {ip, overall, error}'</code></pre>
+
+      <h2 id="errors">Errors and limits</h2>
+      <ul>
+        <li><strong>400:</strong> the request was not valid, for example a bad hostname or port. The body is <code>{"error": "..."}</code>.</li>
+        <li><strong>429:</strong> too many checks from your address. Wait for the number of seconds in the <code>Retry-After</code> header. A check costs one unit, plus one more for every four IP addresses tested.</li>
+        <li><strong>502:</strong> the hostname lookup failed.</li>
+      </ul>
+      <p>A failed connection to one IP is not an HTTP error. It shows up as <code>error</code> on that IP's result.</p>
+
+      <h2 id="other">Other endpoints</h2>
+      <ul>
+        <li><code>GET /api/config</code> returns <code>ipOverrideAllowed</code> (whether you may send <code>connectIPs</code>), <code>maxIPsPerHost</code> and the trust store's size and age.</li>
+        <li><code>GET /healthz</code> returns <code>ok</code> while the service is running.</li>
+      </ul>
+
+      <h2 id="links">Links to the web page</h2>
+      <p>A link can fill in the form for someone else. Opening it does not run the check; they still press Check chain.</p>
+      <pre class="code"><code><span data-origin>https://this-server</span>/?host=www.example.edu&amp;port=443
+<span data-origin>https://this-server</span>/?host=smtp.example.edu&amp;port=2525&amp;starttls=smtp</code></pre>
+      <p><code>starttls</code> takes the same values as in the API and has no control on the page.</p>
+    </article>
+  </main>
+
+  <footer class="wrap foot">
+    <a href="./">Back to CA Chain Check</a>
+  </footer>
+</body>
+</html>

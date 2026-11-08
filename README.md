@@ -11,6 +11,8 @@ A small web service that connects to `host:port` with TLS and SNI, accepts whate
 - **Other root stores:** each CA certificate's details link to its [Cloudflare Radar](https://radar.cloudflare.com/certificate-transparency) page (`/certificate-transparency/ca/<SHA-256>`), which shows whether Chrome, Apple, Microsoft and Mozilla include it.
 - **Every chain path:** found by searching issuers by name and verified signature, including cross-signs. All paths are drawn as a Mermaid diagram.
 
+**STARTTLS:** on ports 21 (FTP), 25 and 587 (SMTP), 110 (POP3), 143 (IMAP), 389 (LDAP) and 5432 (PostgreSQL), the check tries TLS first and, if the handshake fails, reconnects and tries STARTTLS for that protocol. The API's `starttls` field (`smtp`, `imap`, `pop3`, `ftp`, `ldap`, `postgres`) forces STARTTLS on any port, and `none` turns the fallback off. The web page has no control for this; it reads an optional `starttls` URL parameter instead.
+
 When a hostname resolves to several IPs, every IP is tested and shown in its own tab, along with a consistency verdict ("IPs serve different chains").
 
 Set `DISABLE_IPV6=true` (Helm: `config.disableIPv6`) on hosts without IPv6 connectivity. With it set, AAAA records are never requested, IPv6 entries in `DNS_OVERRIDES` are skipped and listed as not tested, and an IPv6 literal or connect IP is refused with a clear message.
@@ -30,9 +32,9 @@ make run              # http://127.0.0.1:8080 (reads .env if present)
 {"host": "example.com", "port": 443, "connectIPs": ["203.0.113.10"]}
 ```
 
-`connectIPs` is optional and works like `curl --resolve`: the server connects to those IPs but still sends the hostname as SNI. The response has one entry in `results[]` per IP, each with its TLS info, chain analysis and Mermaid source.
+`starttls` is optional (see above). `connectIPs` is optional and works like `curl --resolve`: the server connects to those IPs but still sends the hostname as SNI. The response has one entry in `results[]` per IP, each with its TLS info, chain analysis and Mermaid source.
 
-`GET /api/config` returns the UI flags. `GET /healthz` is the liveness check.
+`GET /api/config` returns the UI flags. `GET /healthz` is the liveness check. The page at `/help` documents the API for users, with examples.
 
 ## Target access policy
 

@@ -37,6 +37,13 @@ type Request struct {
 	Host       string   `json:"host"`
 	Port       int      `json:"port"`
 	ConnectIPs []string `json:"connectIPs,omitempty"`
+	// StartTLS names a protocol (see StartTLSPorts) whose plain-text upgrade
+	// runs before the TLS handshake; "none" means TLS from the first byte
+	// only. Empty means automatic: TLS first, then STARTTLS if the port is
+	// a common STARTTLS port (AutoStartTLS) and the TLS handshake failed.
+	StartTLS string `json:"starttls,omitempty"`
+	// Fallback is set by Plan: the STARTTLS protocol to try when TLS fails.
+	Fallback string `json:"-"`
 }
 
 // TLSInfo describes the negotiated session.
@@ -46,6 +53,7 @@ type TLSInfo struct {
 	ALPN        string `json:"alpn,omitempty"`
 	SNI         string `json:"sni,omitempty"`
 	HandshakeMS int64  `json:"handshakeMs"`
+	StartTLS    string `json:"starttls,omitempty"` // protocol used, if any
 }
 
 // IPResult is the outcome for one target IP.
@@ -82,6 +90,8 @@ type Consistency struct {
 type Response struct {
 	Host        string          `json:"host"`
 	Port        int             `json:"port"`
+	StartTLS    string          `json:"starttls,omitempty"`         // requested protocol
+	Fallback    string          `json:"starttlsFallback,omitempty"` // tried when TLS fails
 	CheckedAt   time.Time       `json:"checkedAt"`
 	Resolution  Resolution      `json:"resolution"`
 	Results     []IPResult      `json:"results"`
@@ -264,6 +274,25 @@ func (p *Prober) Plan(ctx context.Context, client netip.Addr, req *Request) (hos
 	if err != nil {
 		return
 	}
+	req.StartTLS = strings.ToLower(strings.TrimSpace(req.StartTLS))
+	switch req.StartTLS {
+	case "none":
+		req.StartTLS = "" // explicit plain TLS, even on a STARTTLS port
+	case "":
+		if req.Port == 0 {
+			req.Port = 443
+		}
+		req.Fallback = AutoStartTLS[req.Port]
+	default:
+		def, ok := StartTLSPorts[req.StartTLS]
+		if !ok {
+			err = inputErr("unsupported STARTTLS protocol %q (use none or one of: %s)", req.StartTLS, strings.Join(StartTLSNames(), ", "))
+			return
+		}
+		if req.Port == 0 {
+			req.Port = def
+		}
+	}
 	if req.Port == 0 {
 		req.Port = 443
 	}
@@ -313,8 +342,8 @@ func (p *Prober) Plan(ctx context.Context, client netip.Addr, req *Request) (hos
 }
 
 // Run probes every planned IP concurrently and analyzes the results.
-func (p *Prober) Run(ctx context.Context, client netip.Addr, host string, port int, ips []netip.Addr, res Resolution) *Response {
-	resp := &Response{Host: host, Port: port, CheckedAt: time.Now().UTC(), Resolution: res, TrustStore: p.Store.Info()}
+func (p *Prober) Run(ctx context.Context, client netip.Addr, host string, port int, starttls, fallback string, ips []netip.Addr, res Resolution) *Response {
+	resp := &Response{Host: host, Port: port, StartTLS: starttls, Fallback: fallback, CheckedAt: time.Now().UTC(), Resolution: res, TrustStore: p.Store.Info()}
 	resp.Results = make([]IPResult, len(ips))
 	var wg sync.WaitGroup
 	for i, ip := range ips {
@@ -327,7 +356,7 @@ func (p *Prober) Run(ctx context.Context, client netip.Addr, host string, port i
 		wg.Add(1)
 		go func(r *IPResult, ip netip.Addr) {
 			defer wg.Done()
-			p.probeOne(ctx, r, host, port, ip)
+			p.probeOne(ctx, r, host, port, starttls, fallback, ip)
 		}(&resp.Results[i], ip)
 	}
 	wg.Wait()
@@ -335,7 +364,7 @@ func (p *Prober) Run(ctx context.Context, client netip.Addr, host string, port i
 	return resp
 }
 
-func (p *Prober) probeOne(ctx context.Context, r *IPResult, host string, port int, ip netip.Addr) {
+func (p *Prober) probeOne(ctx context.Context, r *IPResult, host string, port int, starttls, fallback string, ip netip.Addr) {
 	select {
 	case p.Sem <- struct{}{}:
 		defer func() { <-p.Sem }()
@@ -345,7 +374,7 @@ func (p *Prober) probeOne(ctx context.Context, r *IPResult, host string, port in
 		return
 	}
 	r.Tested = true
-	certs, info, err := p.handshake(ctx, host, port, ip)
+	certs, info, err := p.handshake(ctx, host, port, starttls, fallback, ip)
 	if err != nil {
 		r.Error = err.Error()
 		r.Overall = analyze.Fail
@@ -367,7 +396,30 @@ func (p *Prober) probeOne(ctx context.Context, r *IPResult, host string, port in
 	r.chainKey = strings.Join(fps, ",")
 }
 
-func (p *Prober) handshake(ctx context.Context, host string, port int, ip netip.Addr) ([]*x509.Certificate, *TLSInfo, error) {
+// connectError marks a failure to open the TCP connection, which a STARTTLS
+// retry cannot fix.
+type connectError struct{ msg string }
+
+func (e *connectError) Error() string { return e.msg }
+
+// handshake fetches the chain. With starttls set it upgrades with that
+// protocol. Otherwise it tries TLS from the first byte and, if that
+// handshake fails and fallback names a protocol, reconnects and tries
+// STARTTLS.
+func (p *Prober) handshake(ctx context.Context, host string, port int, starttls, fallback string, ip netip.Addr) ([]*x509.Certificate, *TLSInfo, error) {
+	certs, info, err := p.attempt(ctx, host, port, starttls, ip)
+	var ce *connectError
+	if err == nil || starttls != "" || fallback == "" || errors.As(err, &ce) || ctx.Err() != nil {
+		return certs, info, err
+	}
+	certs, info, err2 := p.attempt(ctx, host, port, fallback, ip)
+	if err2 == nil {
+		return certs, info, nil
+	}
+	return nil, nil, fmt.Errorf("%s. STARTTLS (%s) also failed: %s", err, fallback, err2)
+}
+
+func (p *Prober) attempt(ctx context.Context, host string, port int, starttls string, ip netip.Addr) ([]*x509.Certificate, *TLSInfo, error) {
 	addr := net.JoinHostPort(ip.String(), strconv.Itoa(port))
 	dctx, cancel := context.WithTimeout(ctx, p.Cfg.DialTimeout)
 	defer cancel()
@@ -378,7 +430,7 @@ func (p *Prober) handshake(ctx context.Context, host string, port int, ip netip.
 	}
 	raw, err := dial(dctx, "tcp", addr)
 	if err != nil {
-		return nil, nil, fmt.Errorf("connect to %s failed: %s", addr, cleanErr(err))
+		return nil, nil, &connectError{fmt.Sprintf("connect to %s failed: %s", addr, cleanErr(err))}
 	}
 	defer raw.Close()
 
@@ -390,12 +442,22 @@ func (p *Prober) handshake(ctx context.Context, host string, port int, ip netip.
 		ServerName:         sni,
 		InsecureSkipVerify: true, //nolint:gosec // intentional: we analyze trust ourselves
 		MinVersion:         tls.VersionTLS10,
-		NextProtos:         []string{"h2", "http/1.1"},
+	}
+	start := time.Now()
+	if starttls != "" {
+		// The plain-text upgrade shares the handshake time budget.
+		_ = raw.SetDeadline(start.Add(p.Cfg.HandshakeTimeout))
+		if err := startTLS(raw, starttls); err != nil {
+			return nil, nil, fmt.Errorf("STARTTLS (%s) upgrade with %s failed: %s", starttls, addr, cleanErr(err))
+		}
+		_ = raw.SetDeadline(time.Time{})
+	} else {
+		conf.NextProtos = []string{"h2", "http/1.1"}
 	}
 	conn := tls.Client(raw, conf)
-	hctx, hcancel := context.WithTimeout(ctx, p.Cfg.HandshakeTimeout)
+	hctx, hcancel := context.WithDeadline(ctx, start.Add(p.Cfg.HandshakeTimeout))
 	defer hcancel()
-	start := time.Now()
+	hsStart := time.Now()
 	if err := conn.HandshakeContext(hctx); err != nil {
 		return nil, nil, fmt.Errorf("TLS handshake with %s failed: %s", addr, cleanErr(err))
 	}
@@ -406,7 +468,8 @@ func (p *Prober) handshake(ctx context.Context, host string, port int, ip netip.
 		CipherSuite: tls.CipherSuiteName(st.CipherSuite),
 		ALPN:        st.NegotiatedProtocol,
 		SNI:         sni,
-		HandshakeMS: time.Since(start).Milliseconds(),
+		HandshakeMS: time.Since(hsStart).Milliseconds(),
+		StartTLS:    starttls,
 	}, nil
 }
 

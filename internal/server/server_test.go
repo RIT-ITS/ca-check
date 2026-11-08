@@ -211,6 +211,7 @@ func TestVersionedAssets(t *testing.T) {
 	s := &Server{Cfg: cfg, Static: fstest.MapFS{
 		"index.html": {Data: []byte(`<link href="styles.css"><script src="app.js"></script>`)},
 		"styles.css": {Data: []byte("body{}")},
+		"help.html":  {Data: []byte(`<link href="styles.css"><script src="help.js"></script>`)},
 	}}
 	h := s.Handler()
 	w := httptest.NewRecorder()
@@ -218,6 +219,11 @@ func TestVersionedAssets(t *testing.T) {
 	body := w.Body.String()
 	if !strings.Contains(body, `href="styles.css?v=`) || !strings.Contains(body, `src="app.js?v=`) || w.Header().Get("Cache-Control") != "no-cache" {
 		t.Fatalf("index: %q %q", body, w.Header().Get("Cache-Control"))
+	}
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest("GET", "/help", nil))
+	if body := w.Body.String(); w.Code != 200 || !strings.Contains(body, `src="help.js?v=`) || w.Header().Get("Cache-Control") != "no-cache" {
+		t.Fatalf("help: %d %q %q", w.Code, body, w.Header().Get("Cache-Control"))
 	}
 	w = httptest.NewRecorder()
 	h.ServeHTTP(w, httptest.NewRequest("GET", "/styles.css?v=abc", nil))
