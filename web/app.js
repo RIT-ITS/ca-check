@@ -547,7 +547,7 @@
           if (!mermaidReady) {
             window.mermaid.initialize({
               startOnLoad: false, securityLevel: "strict", theme: "base",
-              themeVariables: { fontFamily: "Fira Sans, system-ui, sans-serif", fontSize: "14px", lineColor: "#7d8a99", primaryTextColor: "#16202b", edgeLabelBackground: getComputedStyle(document.documentElement).getPropertyValue("--plate").trim() || "#ffffff" },
+              themeVariables: { fontFamily: "IBM Plex Sans, system-ui, sans-serif", fontSize: "14px", lineColor: "#7d8a99", primaryTextColor: "#16202b", edgeLabelBackground: getComputedStyle(document.documentElement).getPropertyValue("--plate").trim() || "#ffffff" },
               flowchart: { htmlLabels: true, curve: "basis", nodeSpacing: 36, rankSpacing: 44 },
             });
             mermaidReady = true;
