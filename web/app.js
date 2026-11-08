@@ -10,6 +10,63 @@
   const results = $("#results");
   let diagramSeq = 0;
   let mermaidReady = false;
+  let viewSeq = 0;
+  // Versioned URL of the diagram library, set on this script's tag by the server.
+  const MERMAID_SRC = (document.currentScript && document.currentScript.dataset.mermaid) || "vendor/mermaid.min.js";
+
+  // The diagram library is large, so it loads when the first check starts,
+  // not with the page.
+  let mermaidLoading = null;
+  function loadMermaid() {
+    if (window.mermaid) return Promise.resolve();
+    if (!mermaidLoading) {
+      mermaidLoading = new Promise((resolve, reject) => {
+        const s = document.createElement("script");
+        s.src = MERMAID_SRC;
+        s.onload = () => resolve();
+        s.onerror = () => { mermaidLoading = null; reject(new Error("the diagram library did not load")); };
+        document.head.append(s);
+      });
+    }
+    return mermaidLoading;
+  }
+
+  // Short messages for screen readers (WCAG 4.1.3). Clearing first makes a
+  // repeated message ("Copied") announce again.
+  const announceEl = document.getElementById("announce");
+  function announce(msg) {
+    if (!announceEl) return;
+    announceEl.textContent = "";
+    setTimeout(() => { announceEl.textContent = msg; }, 60);
+  }
+
+  // Give every id inside a rendered view a unique prefix and update the
+  // references to them, so several IP panels (and RSA/ECDSA views) never
+  // share heading ids.
+  function scopeIds(root, prefix) {
+    const map = new Map();
+    root.querySelectorAll("[id]").forEach((el) => {
+      const id = `${prefix}-${el.id}`;
+      map.set(el.id, id);
+      el.id = id;
+    });
+    for (const attr of ["aria-labelledby", "aria-describedby", "aria-controls", "for"]) {
+      root.querySelectorAll(`[${attr}]`).forEach((el) => {
+        el.setAttribute(attr, el.getAttribute(attr).split(/\s+/).map((v) => map.get(v) || v).join(" "));
+      });
+    }
+  }
+
+  // Phone layouts restyle tables as stacked blocks; explicit roles keep
+  // their row and column structure for screen readers.
+  function tableRoles(table) {
+    table.setAttribute("role", "table");
+    table.querySelectorAll("thead, tbody").forEach((g) => g.setAttribute("role", "rowgroup"));
+    table.querySelectorAll("tr").forEach((r) => r.setAttribute("role", "row"));
+    table.querySelectorAll("th").forEach((c) => c.setAttribute("role", c.getAttribute("scope") === "row" ? "rowheader" : "columnheader"));
+    table.querySelectorAll("td").forEach((c) => c.setAttribute("role", "cell"));
+    return table;
+  }
 
   // ---------- DOM helpers ----------
   function h(tag, attrs, ...children) {
@@ -146,6 +203,8 @@
     if (ips.length && !$("#advanced").hidden) body.connectIPs = ips;
 
     submitEl.disabled = true;
+    loadMermaid().catch(() => {}); // in parallel with the check; drawing reports a failure
+    announce(`Checking ${host}:${port}…`);
     results.setAttribute("aria-busy", "true");
     results.replaceChildren(h("div", { class: "sheet" },
       h("div", { class: "loading" }, h("span", { class: "meterbar", "aria-hidden": "true" }), `Connecting to ${host}:${port} and reading its chain…`)));
@@ -161,6 +220,7 @@
           h("p", {}, resp.status === 429
             ? `Wait ${retry || "a few"} seconds, then try again.`
             : (data.error || `The server answered HTTP ${resp.status}.`))));
+        announce(resp.status === 429 ? `Too many checks. Wait ${retry || "a few"} seconds, then try again.` : `The check could not run. ${data.error || ""}`);
         return;
       }
       renderStoreInfo(data.trustStore);
@@ -170,14 +230,32 @@
       if (starttls) url.searchParams.set("starttls", starttls); else url.searchParams.delete("starttls");
       saveHistory(url, data);
       await render(data);
+      announce(finishedText(data));
     } catch (e) {
       results.replaceChildren(h("div", { class: "sheet notice fail reveal" },
         h("h2", {}, "Could not reach CA Chain Check"), h("p", {}, `Check your connection and try again. (${e.message || e})`)));
+      announce("Could not reach CA Chain Check. Check your connection and try again.");
     } finally {
       submitEl.disabled = false;
       results.removeAttribute("aria-busy");
     }
   });
+
+  // One sentence summing up a finished check, for the status announcement.
+  function finishedText(data) {
+    const list = data.results || [];
+    const tested = list.filter((r) => r.analysis);
+    let overall = "";
+    for (const r of list) overall = worse(overall, r.overall || "info");
+    const word = !tested.length ? "no chain could be read"
+      : overall === "fail" ? "the chain is broken" : overall === "warn" ? "the chain works, with warnings" : "the chain is correct";
+    const n = list.length;
+    return `Check finished for ${data.host}:${data.port}: ${word}. ${n} address${n === 1 ? "" : "es"} tested. Results follow.`;
+  }
+  function worse(a, b) {
+    const rank = { "": -1, pass: 0, info: 1, warn: 2, fail: 3 };
+    return (rank[b] ?? 0) > (rank[a] ?? -1) ? b : a;
+  }
 
   function showFormError(msg) { errEl.textContent = msg; errEl.hidden = false; hostEl.focus(); }
 
@@ -205,10 +283,10 @@
     results.replaceChildren(h("div", { class: "sheet intro" },
       h("h1", {}, "Check the certificate chain a server sends"),
       h("p", {}, "Enter a host above. CA Chain Check connects to it (with SNI), reads the certificate chain it sends without trusting it, and runs the tests below. Anything that fails comes with a fix. Each IP address behind the name is tested on its own."),
-      h("table", { class: "results" },
+      tableRoles(h("table", { class: "results" },
         h("thead", {}, h("tr", {}, h("th", { scope: "col" }, "Test"), h("th", { scope: "col" }, "Expected"))),
         h("tbody", {}, rows.map(([id, exp]) => h("tr", {},
-          h("td", { class: "test" }, titles[id]), h("td", { class: "expected", style: "width:auto" }, exp)))))));
+          h("td", { class: "test" }, titles[id]), h("td", { class: "expected", style: "width:auto" }, exp))))))));
   }
 
   // ---------- rendering ----------
@@ -333,12 +411,12 @@
       t.starttls ? metaItem("STARTTLS", protoName(t.starttls)) : null));
     if (!two && res.keyTypeNote && !onlyOne) panel.append(h("p", { class: "keynote" }, res.keyTypeNote));
 
-    panel.append(interpretation(a, host, t.starttls, two ? kt : ""));
-    panel.append(resultTable(a));
-    panel.append(validitySection(a));
-    panel.append(chainSection(a));
+    const view = h("div", {},
+      interpretation(a, host, t.starttls, two ? kt : ""), resultTable(a), validitySection(a), chainSection(a));
     const pathsSec = pathsSection(a, byId);
-    panel.append(pathsSec.el);
+    view.append(pathsSec.el);
+    scopeIds(view, `v${++viewSeq}`);
+    panel.append(view);
     await pathsSec.draw();
   }
 
@@ -401,8 +479,8 @@
     fixes.sort((x, y) => ({ fail: 0, warn: 1, info: 2 })[x.status] - ({ fail: 0, warn: 1, info: 2 })[y.status]);
     const copyLabel = h("span", {}, "Copy summary");
     const copyBtn = h("button", { class: "btn-quiet", type: "button", onclick: async () => {
-      try { await navigator.clipboard.writeText(summaryText(a, host, viaStartTLS, verdict, fixes, keyLabel)); copyLabel.textContent = "Copied"; }
-      catch { copyLabel.textContent = "Copy failed"; }
+      try { await navigator.clipboard.writeText(summaryText(a, host, viaStartTLS, verdict, fixes, keyLabel)); copyLabel.textContent = "Copied"; announce("Summary copied"); }
+      catch { copyLabel.textContent = "Copy failed"; announce("Copy failed"); }
       setTimeout(() => { copyLabel.textContent = "Copy summary"; }, 1600);
     } }, icon("copy"), copyLabel);
     return h("section", { class: `interp ${st}`, "aria-labelledby": "interp-h" },
@@ -438,7 +516,7 @@
   function resultTable(a) {
     return h("section", { "aria-labelledby": "res-h" },
       h("h2", { class: "sec", id: "res-h" }, "Results"),
-      h("table", { class: "results" },
+      tableRoles(h("table", { class: "results" },
         h("thead", {}, h("tr", {},
           h("th", { scope: "col" }, "Test"), h("th", { scope: "col" }, "Result"),
           h("th", { scope: "col" }, "Expected"), h("th", { scope: "col" }, "Flag"))),
@@ -449,7 +527,7 @@
             c.items && c.items.length && !(c.id === "mozilla_root" && c.status === "warn") ? h("ul", {}, c.items.map((it) => h("li", {}, storeText(it)))) : null,
             c.id === "mozilla_root" && a.trustStores && a.trustStores.length && c.status !== "fail" ? storeList(a.trustStores) : null),
           h("td", { class: "expected" }, EXPECTED[c.id] || ""),
-          h("td", { class: "flagcell" }, flag(c.status)))))));
+          h("td", { class: "flagcell" }, flag(c.status))))))));
   }
 
   // ---------- validity reference-range graph ----------
@@ -590,8 +668,8 @@
     }
     const copyLabel = h("span", {}, "Copy PEM");
     const copyBtn = h("button", { class: "btn-quiet", type: "button", onclick: async () => {
-      try { await navigator.clipboard.writeText(c.pem); copyLabel.textContent = "Copied"; }
-      catch { copyLabel.textContent = "Copy failed. Select the text instead"; }
+      try { await navigator.clipboard.writeText(c.pem); copyLabel.textContent = "Copied"; announce("PEM copied"); }
+      catch { copyLabel.textContent = "Copy failed. Select the text instead"; announce("Copy failed. Select the text instead."); }
       setTimeout(() => { copyLabel.textContent = "Copy PEM"; }, 1600);
     } }, icon("copy"), copyLabel);
 
@@ -612,7 +690,7 @@
   function pathsSection(a, byId) {
     const fig = h("figure", { class: "plate" }, h("div", { class: "diagram" }, "Drawing paths…"), diagramKey(a.diagramKey));
     const TERM = { mozilla_root: ["pass", "Trusted root"], untrusted_root: ["fail", "Untrusted root"], incomplete: ["fail", "Incomplete"] };
-    const table = h("table", { class: "paths" },
+    const table = tableRoles(h("table", { class: "paths" },
       h("thead", {}, h("tr", {}, h("th", { scope: "col" }, "Ends at"), h("th", { scope: "col" }, "Route"), h("th", { scope: "col" }, "Notes"))),
       h("tbody", {}, a.paths.map((p) => {
         const parts = [];
@@ -632,8 +710,8 @@
         }
         if (!p.timeValid) notes.push(h("span", { class: "tag fail" }, icon("fail"), "Validity problem"));
         if (p.pendingDistrust) notes.push(h("span", { class: "tag warn" }, icon("warn"), "Pending distrust"));
-        return h("tr", {}, h("td", {}, flagWord(st, word)), h("td", { class: "route" }, parts), h("td", {}, h("span", { class: "c-flags" }, notes)));
-      })));
+        return h("tr", {}, h("td", { class: "ends" }, flagWord(st, word)), h("td", { class: "route" }, parts), h("td", { class: "notes" }, h("span", { class: "c-flags" }, notes)));
+      }))));
     const el = h("section", { "aria-labelledby": "paths-h" },
       h("h2", { class: "sec", id: "paths-h" }, "Paths", h("small", {}, `${a.paths.length} found, including cross-signs. Roots are at the top, the leaf at the bottom.`)),
       fig, table);
@@ -642,7 +720,7 @@
       draw: async () => {
         const slot = fig.querySelector(".diagram");
         try {
-          if (!window.mermaid) throw new Error("the diagram library did not load");
+          await loadMermaid();
           if (!mermaidReady) {
             window.mermaid.initialize({
               startOnLoad: false, securityLevel: "strict", theme: "base",
@@ -651,8 +729,10 @@
             });
             mermaidReady = true;
           }
-          const { svg } = await window.mermaid.render(`chain-diagram-${++diagramSeq}`, a.mermaid);
+          const svgId = `chain-diagram-${++diagramSeq}`;
+          const { svg } = await window.mermaid.render(svgId, a.mermaid);
           slot.innerHTML = svg; // produced by Mermaid with securityLevel "strict"
+          uniqueSvgIds(slot.firstElementChild, svgId);
           slot.firstElementChild?.setAttribute("aria-label", "Certificate issuance paths diagram");
           slot.firstElementChild?.setAttribute("role", "img");
           if (slot.firstElementChild) hatchDiagram(slot.firstElementChild, a.diagramKey);
@@ -661,6 +741,29 @@
         }
       },
     };
+  }
+
+  // Mermaid names edges L_<from>_<to>_<n> in every diagram, so two diagrams
+  // on one page share ids. Prefix those with the diagram's own id and update
+  // any references to them.
+  function uniqueSvgIds(svg, prefix) {
+    if (!svg) return;
+    const map = new Map();
+    svg.querySelectorAll("[id]").forEach((el) => {
+      if (el === svg || el.id.startsWith(prefix)) return;
+      const id = `${prefix}-${el.id}`;
+      map.set(el.id, id);
+      el.id = id;
+    });
+    if (!map.size) return;
+    const fix = (v) => v.replace(/url\(#([^)]+)\)/g, (m, id) => (map.has(id) ? `url(#${map.get(id)})` : m))
+      .replace(/^#(.+)$/, (m, id) => (map.has(id) ? `#${map.get(id)}` : m));
+    svg.querySelectorAll("*").forEach((el) => {
+      for (const attr of ["href", "xlink:href", "marker-start", "marker-end", "clip-path", "fill", "mask", "filter"]) {
+        const v = el.getAttribute(attr);
+        if (v && v.includes("#")) el.setAttribute(attr, fix(v));
+      }
+    });
   }
 
   function flagWord(st, word) { return h("span", { class: `flag ${st}` }, icon(st), word); }
@@ -774,7 +877,7 @@
     if (data) {
       document.title = `${hostEl.value}:${portEl.value} | CA Chain Check`;
       renderStoreInfo(data.trustStore);
-      render(data);
+      render(data).then(() => announce(`Showing an earlier check. ${finishedText(data).replace(/^Check finished for /, "")}`));
     } else {
       document.title = "CA Chain Check";
       renderIntro();

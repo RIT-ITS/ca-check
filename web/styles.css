@@ -423,7 +423,8 @@ table.params { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); 
   .report-head, .panel, .intro, .notice { padding: var(--s4); }
   .meta div.wide { flex-basis: 100%; }
   .tabs { padding: 0 var(--s2); }
-  table.results thead { display: none; }
+  /* Headers stay in the accessibility tree; each cell shows its own label. */
+  table.results thead, table.paths thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   table.results tr { display: grid; grid-template-columns: 1fr auto; border-bottom: 1px solid var(--rule); }
   table.results td { border: 0; width: auto !important; padding: var(--s1) var(--s3); }
   table.results td.test { grid-column: 1; padding-top: var(--s3); }
@@ -435,7 +436,11 @@ table.params { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); 
   .interp-top { flex-direction: column; gap: var(--s2); }
   dl.kv { grid-template-columns: 1fr; }
   dl.kv dt { margin-top: var(--s2); }
-  .paths th:nth-child(3), .paths td:nth-child(3) { display: none; }
+  /* Paths: one block per path: where it ends, the route, then the notes. */
+  table.paths tr { display: grid; grid-template-columns: minmax(0, 1fr); border-bottom: 1px solid var(--rule); padding: var(--s2) 0; }
+  table.paths td { border: 0; padding: var(--s1) var(--s3); }
+  table.paths td.notes:empty, table.paths td.notes:not(:has(.tag)) { display: none; }
+  table.paths td.notes .tag { white-space: normal; }
 }
 
 @media print {

@@ -9,8 +9,8 @@
   <link rel="preload" href="fonts/plex/ibm-plex-sans-latin-400-normal.woff2?v=1" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="theme.css">
-  <script src="vendor/mermaid.min.js" defer></script>
-  <script src="app.js" defer></script>
+  <!-- The diagram library (vendor/mermaid.min.js) loads on the first check. -->
+  <script src="app.js" data-mermaid="vendor/mermaid.min.js" defer></script>
 </head>
 <body>
   <a class="skip" href="#report">Skip to report</a>
@@ -45,7 +45,8 @@
   </header>
 
   <main id="report" class="wrap" tabindex="-1">
-    <section id="results" aria-live="polite"></section>
+    <section id="results"></section>
+    <div id="announce" class="sr" role="status" aria-live="polite" aria-atomic="true"></div>
   </main>
 
   <footer class="wrap foot">
