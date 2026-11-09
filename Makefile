@@ -30,6 +30,7 @@ refresh-roots:
 	curl -fsSL -o assets/mozilla-roots.pem '$(ROOTS_URL)'
 	curl -fsSL -o assets/root-stores.csv '$(STORES_URL)'
 	curl -fsSL -o assets/microsoft-roots.csv '$(MICROSOFT_URL)'
+	date -u +%F > assets/roots-date.txt
 	@grep -c 'BEGIN CERTIFICATE' assets/mozilla-roots.pem
 
 refresh-mermaid:

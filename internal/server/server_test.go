@@ -231,3 +231,23 @@ func TestVersionedAssets(t *testing.T) {
 		t.Fatalf("asset: %d %q", w.Code, w.Header().Get("Cache-Control"))
 	}
 }
+
+// With no trust store data the check is refused with 503 and Retry-After,
+// and the refusal does not use up the client's rate limit.
+func TestCheckWithoutTrustStore(t *testing.T) {
+	cfg, err := config.LoadFrom(func(k string) string { return map[string]string{"RATE_LIMIT_BURST": "1"}[k] })
+	if err != nil {
+		t.Fatal(err)
+	}
+	empty := truststore.NewWithTrust(nil, nil, "none")
+	guard := netguard.New(cfg.TargetDenyCIDRs, cfg.PrivateTargetExtraCIDRs, cfg.PrivateTargetClientCIDRs, cfg.IPOverrideClientCIDRs, cfg.AllowRequestIPOverride)
+	s := &Server{Cfg: cfg, Guard: guard, Store: empty, Limiter: ratelimit.New(cfg.RateLimitRPM, cfg.RateLimitBurst),
+		Static: fstest.MapFS{"index.html": {Data: []byte("hi")}}, Prober: &probe.Prober{Cfg: cfg, Guard: guard, Store: empty}}
+	h := s.Handler()
+	for i := 0; i < 3; i++ {
+		w := post(h, "203.0.113.9:1234", map[string]any{"host": "example.com"})
+		if w.Code != http.StatusServiceUnavailable || w.Header().Get("Retry-After") == "" {
+			t.Fatalf("try %d: %d %q %s", i, w.Code, w.Header().Get("Retry-After"), w.Body)
+		}
+	}
+}

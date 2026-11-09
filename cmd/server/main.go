@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -39,10 +40,11 @@ func main() {
 
 	loader := &truststore.Loader{
 		MozillaURL: cfg.MozillaRootsURL, StoresURL: cfg.CCADBStoresURL, MicrosoftURL: cfg.MicrosoftRootsURL,
-		Fallback: truststore.Sources{MozillaPEM: assets.MozillaRootsPEM, StoresCSV: assets.RootStoresCSV, MicrosoftCSV: assets.MicrosoftRootsCSV},
+		Fallback:     truststore.Sources{MozillaPEM: assets.MozillaRootsPEM, StoresCSV: assets.RootStoresCSV, MicrosoftCSV: assets.MicrosoftRootsCSV},
+		FallbackDate: snapshotDate(),
 	}
-	loader.Init(ctx)
-	go loader.Run(ctx, cfg.TruststoreRefresh)
+	initErr := loader.Init(ctx)
+	go loader.Run(ctx, cfg.TruststoreRefresh, initErr)
 
 	guard := netguard.New(cfg.TargetDenyCIDRs, cfg.PrivateTargetExtraCIDRs,
 		cfg.PrivateTargetClientCIDRs, cfg.IPOverrideClientCIDRs, cfg.AllowRequestIPOverride)
@@ -109,4 +111,13 @@ func healthcheck() int {
 		return 1
 	}
 	return 0
+}
+
+// snapshotDate is when the embedded CCADB reports were downloaded.
+func snapshotDate() time.Time {
+	d, err := time.Parse(time.DateOnly, strings.TrimSpace(assets.RootsDate))
+	if err != nil {
+		slog.Warn("assets/roots-date.txt is not a YYYY-MM-DD date", "err", err)
+	}
+	return d
 }

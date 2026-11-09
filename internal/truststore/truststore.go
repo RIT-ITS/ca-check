@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math/rand/v2"
 	"net/http"
 	"sort"
 	"strings"
@@ -49,14 +50,21 @@ type Store struct {
 	trust     map[string]map[string]string // fingerprint -> program -> level
 	source    string
 	loadedAt  time.Time
+	// Download status, set by the Loader.
+	refreshFailing bool
+	nextAttempt    time.Time
 }
 
 // Info describes the current store for display.
 type Info struct {
 	Source   string         `json:"source"`
 	Count    int            `json:"count"`
-	LoadedAt time.Time      `json:"loadedAt"`
+	LoadedAt time.Time      `json:"loadedAt"`         // when the data was downloaded from CCADB
 	Stores   map[string]int `json:"stores,omitempty"` // roots each program trusts fully
+	// RefreshFailing is set when the last download from CCADB failed;
+	// NextAttempt is when the server tries again.
+	RefreshFailing bool       `json:"refreshFailing,omitempty"`
+	NextAttempt    *time.Time `json:"nextAttempt,omitempty"`
 }
 
 // FingerprintSHA256 returns the lowercase hex SHA-256 of the DER encoding.
@@ -100,15 +108,28 @@ func NewFromCerts(certs []*x509.Certificate, source string) *Store {
 	return NewWithTrust(certs, trust, source)
 }
 
+// Empty reports whether no roots are loaded, so trust cannot be checked.
+func (s *Store) Empty() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return len(s.byFP) == 0
+}
+
+func (s *Store) setStatus(failing bool, next time.Time) {
+	s.mu.Lock()
+	s.refreshFailing, s.nextAttempt = failing, next
+	s.mu.Unlock()
+}
+
 // NewWithTrust builds a store from roots and their per-program trust.
 // Roots no program trusts are dropped.
 func NewWithTrust(certs []*x509.Certificate, trust map[string]map[string]string, source string) *Store {
 	s := &Store{}
-	s.set(certs, trust, source)
+	s.set(certs, trust, source, time.Now())
 	return s
 }
 
-func (s *Store) set(certs []*x509.Certificate, trust map[string]map[string]string, source string) {
+func (s *Store) set(certs []*x509.Certificate, trust map[string]map[string]string, source string, loadedAt time.Time) {
 	byFP := map[string]*x509.Certificate{}
 	bySubj := map[string][]*x509.Certificate{}
 	bySKI := map[string][]*x509.Certificate{}
@@ -127,7 +148,7 @@ func (s *Store) set(certs []*x509.Certificate, trust map[string]map[string]strin
 	}
 	s.mu.Lock()
 	s.byFP, s.bySubject, s.bySKI, s.trust = byFP, bySubj, bySKI, kept
-	s.source, s.loadedAt = source, time.Now()
+	s.source, s.loadedAt = source, loadedAt
 	s.mu.Unlock()
 }
 
@@ -189,7 +210,12 @@ func (s *Store) Info() Info {
 			}
 		}
 	}
-	return Info{Source: s.source, Count: len(s.byFP), LoadedAt: s.loadedAt, Stores: counts}
+	info := Info{Source: s.source, Count: len(s.byFP), LoadedAt: s.loadedAt, Stores: counts, RefreshFailing: s.refreshFailing}
+	if s.refreshFailing && !s.nextAttempt.IsZero() {
+		next := s.nextAttempt
+		info.NextAttempt = &next
+	}
+	return info
 }
 
 // Sources are the three CCADB reports the store is built from.
@@ -337,46 +363,70 @@ type Loader struct {
 	StoresURL    string
 	MicrosoftURL string
 	Fallback     Sources
+	FallbackDate time.Time // when the embedded reports were downloaded
 	Client       *http.Client
+	// Retry back-off after a failed download; zero means the defaults.
+	RetryMin, RetryMax time.Duration
 }
 
+// Retry delays after a failed download: RetryMin, doubling each time, at
+// most RetryMax (and never longer than the normal refresh interval).
+const (
+	DefaultRetryMin = time.Minute
+	DefaultRetryMax = time.Hour
+)
+
 // Init loads the embedded reports immediately, then tries the live ones.
-func (l *Loader) Init(ctx context.Context) {
+// It returns the live download's error, if any.
+func (l *Loader) Init(ctx context.Context) error {
 	if l.Store == nil {
 		l.Store = &Store{}
 	}
 	if certs, trust, err := Build(l.Fallback); err == nil {
-		l.Store.set(certs, trust, "embedded snapshot")
+		l.Store.set(certs, trust, "embedded snapshot", l.FallbackDate)
 	} else {
 		slog.Error("embedded trust store snapshot is unusable", "err", err)
 	}
-	l.Refresh(ctx)
+	return l.Refresh(ctx)
 }
 
 // Refresh fetches all three reports; if any fails the current store is kept.
-func (l *Loader) Refresh(ctx context.Context) {
+func (l *Loader) Refresh(ctx context.Context) error {
 	if l.MozillaURL == "" || l.StoresURL == "" || l.MicrosoftURL == "" {
-		return
+		return nil
 	}
 	var src Sources
-	var err error
 	for _, f := range []struct {
 		url string
 		dst *[]byte
 	}{{l.MozillaURL, &src.MozillaPEM}, {l.StoresURL, &src.StoresCSV}, {l.MicrosoftURL, &src.MicrosoftCSV}} {
+		var err error
 		if *f.dst, err = l.fetch(ctx, f.url); err != nil {
-			slog.Warn("trust store refresh failed; keeping current store", "url", f.url, "err", err, "source", l.Store.Info().Source)
-			return
+			slog.Warn("trust store refresh failed; keeping current store", "url", f.url, "err", err, "source", l.Store.Info().Source, "roots", l.Store.Info().Count)
+			return fmt.Errorf("%s: %w", f.url, err)
 		}
 	}
 	certs, trust, err := Build(src)
 	if err != nil {
-		slog.Warn("trust store refresh failed; keeping current store", "err", err, "source", l.Store.Info().Source)
-		return
+		slog.Warn("trust store refresh failed; keeping current store", "err", err, "source", l.Store.Info().Source, "roots", l.Store.Info().Count)
+		return err
 	}
-	l.Store.set(certs, trust, "CCADB")
+	l.Store.set(certs, trust, "CCADB", time.Now())
 	info := l.Store.Info()
 	slog.Info("trust store refreshed", "roots", info.Count, "stores", info.Stores)
+	return nil
+}
+
+// RetryDelay is the wait before retry number n (1 for the first retry).
+func RetryDelay(n int, min, max time.Duration) time.Duration {
+	d := min
+	for i := 1; i < n && d < max; i++ {
+		d *= 2
+	}
+	if d > max {
+		d = max
+	}
+	return d
 }
 
 func (l *Loader) fetch(ctx context.Context, url string) ([]byte, error) {
@@ -400,15 +450,40 @@ func (l *Loader) fetch(ctx context.Context, url string) ([]byte, error) {
 	return io.ReadAll(io.LimitReader(resp.Body, 32<<20))
 }
 
-// Run refreshes on the given interval until ctx is done.
-func (l *Loader) Run(ctx context.Context, every time.Duration) {
-	t := time.NewTicker(every)
-	defer t.Stop()
+// Run refreshes on the given interval until ctx is done. lastErr is the
+// result of the download Init made. After a failed download it retries
+// sooner, backing off from RetryMin to RetryMax, then returns to the normal
+// interval once a download succeeds.
+func (l *Loader) Run(ctx context.Context, every time.Duration, lastErr error) {
+	min, max := l.RetryMin, l.RetryMax
+	if min <= 0 {
+		min = DefaultRetryMin
+	}
+	if max <= 0 {
+		max = DefaultRetryMax
+	}
+	if max > every {
+		max = every
+	}
+	failures := 0
 	for {
+		wait := every
+		if lastErr != nil {
+			failures++
+			wait = RetryDelay(failures, min, max)
+			// Up to 10% jitter so replicas don't retry in step.
+			wait += time.Duration(rand.Int64N(int64(wait)/10 + 1))
+			slog.Info("trust store download will be retried", "in", wait.Round(time.Second).String(), "failures", failures)
+		} else {
+			failures = 0
+		}
+		l.Store.setStatus(lastErr != nil, time.Now().UTC().Add(wait))
+		t := time.NewTimer(wait)
 		select {
 		case <-t.C:
-			l.Refresh(ctx)
+			lastErr = l.Refresh(ctx)
 		case <-ctx.Done():
+			t.Stop()
 			return
 		}
 	}

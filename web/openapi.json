@@ -122,6 +122,24 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "This server has no trust store data yet (for example, the first download from CCADB failed and there is no built-in copy), so it cannot tell whether a chain is trusted. Try again after `Retry-After` seconds. This does not use the rate limit.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until the server tries the download again.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       }
@@ -820,14 +838,17 @@
         "type": "object",
         "properties": {
           "source": {
-            "type": "string"
+            "type": "string",
+            "description": "`CCADB` when the data was downloaded by this server, or `embedded snapshot` when it is the copy built into the server."
           },
           "count": {
-            "type": "integer"
+            "type": "integer",
+            "description": "Roots loaded. 0 means the server has no trust store data and `POST /api/check` answers 503."
           },
           "loadedAt": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "description": "When the data was downloaded from CCADB. For the built-in copy, the date it was downloaded for the build."
           },
           "stores": {
             "type": "object",
@@ -841,6 +862,15 @@
               "microsoft": 204,
               "mozilla": 118
             }
+          },
+          "refreshFailing": {
+            "type": "boolean",
+            "description": "The last download from CCADB failed. The server keeps the data it has and retries, waiting longer after each failure (1 minute, doubling, at most 1 hour)."
+          },
+          "nextAttempt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the server tries the download again. Only set while `refreshFailing` is true."
           }
         }
       },

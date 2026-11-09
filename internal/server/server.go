@@ -122,6 +122,17 @@ func (s *Server) check(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "cannot determine client address")
 		return
 	}
+	// Without root store data every chain would look untrusted, so refuse
+	// rather than report wrong results. This doesn't use the rate limit.
+	if s.Store.Empty() {
+		wait := 60
+		if next := s.Store.Info().NextAttempt; next != nil {
+			wait = max(int(time.Until(*next).Seconds())+1, 5)
+		}
+		w.Header().Set("Retry-After", strconv.Itoa(wait))
+		writeErr(w, http.StatusServiceUnavailable, "This server has no trust store data yet, so it cannot tell whether a chain is trusted. It retries the download from CCADB automatically. Try again in a few minutes.")
+		return
+	}
 	if ok, wait := s.Limiter.AllowN(client, 1); !ok {
 		slog.Info("rate limited", "client", client)
 		s.limited(w, wait)

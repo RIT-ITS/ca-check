@@ -343,6 +343,7 @@ if __name__ == "__main__":
         <li><strong>400:</strong> the request was not valid, for example a bad hostname or port, a hostname that does not resolve, or <code>connectIPs</code> when you may not use it. The body is <code>{"error": "..."}</code>.</li>
         <li><strong>429:</strong> too many checks from your address. Wait for the number of seconds in the <code>Retry-After</code> header. A host with many IP addresses uses more of the limit than a host with one.</li>
         <li><strong>502:</strong> the DNS lookup failed, for example because the resolver timed out.</li>
+        <li><strong>503:</strong> this server has no trust store data yet, so it cannot tell whether a chain is trusted. It retries the download automatically. Try again after the number of seconds in <code>Retry-After</code>.</li>
       </ul>
       <p>A failed connection to one IP is not an HTTP error. It shows up as <code>error</code> on that IP's result. An address this server may not test, such as a private address, shows up with <code>tested: false</code> and <code>denyReason</code>.</p>
 

@@ -166,21 +166,38 @@
   fetch("api/config").then((r) => r.json()).then((cfg) => {
     if (cfg.ipOverrideAllowed) $("#advanced").hidden = false;
     renderStoreInfo(cfg.trustStore);
+    // Only on the start page; a check result already explains itself.
+    if (cfg.trustStore && !cfg.trustStore.count && !results.querySelector(".panel, .notice")) {
+      results.prepend(h("div", { class: "sheet notice warn no-data" },
+        h("h2", {}, "Checks are unavailable for now"),
+        h("p", {}, "This server has no trust store data yet, so it cannot tell whether a chain is trusted. "
+          + "It downloads the data from CCADB and retries automatically"
+          + (cfg.trustStore.nextAttempt ? `; the next try is at ${fmtDateTime(cfg.trustStore.nextAttempt)}` : "")
+          + ". Reload this page in a few minutes.")));
+    }
   }).catch(() => { $("#store-info").textContent = ""; });
 
   function renderStoreInfo(ts) {
     if (!ts) return;
-    const when = ts.loadedAt ? fmtDateTime(ts.loadedAt) : "unknown";
-    const src = ts.source && !ts.source.startsWith("embedded") ? "downloaded" : "built-in copy";
+    const el = $("#store-info");
+    const retry = ts.nextAttempt ? ` Next try ${fmtDateTime(ts.nextAttempt)}.` : "";
+    if (!ts.count) {
+      el.replaceChildren(`No trust store data loaded. The download from CCADB failed and is retried automatically.${retry}`);
+      return;
+    }
+    const known = ts.loadedAt && !ts.loadedAt.startsWith("0001");
+    const loaded = ts.source && !ts.source.startsWith("embedded")
+      ? `Downloaded ${known ? fmtDateTime(ts.loadedAt) : "at an unknown time"}.`
+      : `Built-in copy${known ? ` from ${ts.loadedAt.slice(0, 10)}` : ""}.`;
+    const failing = ts.refreshFailing ? ` The latest download from CCADB failed, so this data may be out of date.${retry}` : "";
     const counts = ts.stores || {};
     const parts = [];
     STORES.filter((s) => counts[s]).forEach((s, i, all) => {
       parts.push(storeName(s), ` ${counts[s]}`, i < all.length - 1 ? ", " : "");
     });
-    const loaded = src === "downloaded" ? `Downloaded ${when}.` : `Built-in copy, loaded ${when}.`;
-    $("#store-info").replaceChildren(...(parts.length
-      ? ["Trust stores: ", ...parts, " roots. ", loaded]
-      : [`Trust store: ${ts.count} roots. `, loaded]));
+    el.replaceChildren(...(parts.length
+      ? ["Trust stores: ", ...parts, " roots. ", loaded + failing]
+      : [`Trust store: ${ts.count} roots. `, loaded + failing]));
   }
 
   // ---------- input ----------
