@@ -27,9 +27,7 @@ try {
     exit 3
 }
 
-$rows = [System.Collections.Generic.List[object]]::new()
-$rows.Add(@('IP', 'KEY', 'TLS', 'RESULT', 'PROBLEMS'))
-foreach ($ip in $r.results) {
+$rows = foreach ($ip in $r.results) {
     if ($ip.analysis) {
         $result = $ip.analysis.overall
         $problems = Get-Problems $ip.analysis
@@ -37,21 +35,13 @@ foreach ($ip in $r.results) {
         $result = $ip.overall
         $problems = "$($ip.error)$($ip.denyReason)"
     }
-    $key = if ($ip.keyType) { $ip.keyType } else { '-' }
-    $tls = if ($ip.tls) { $ip.tls.version } else { '-' }
-    $rows.Add(@($ip.ip, $key, $tls, $result, $problems))
+    [pscustomobject]@{ IP = $ip.ip; Key = $(if ($ip.keyType) { $ip.keyType } else { '-' }); TLS = $(if ($ip.tls) { $ip.tls.version } else { '-' }); Result = $result; Problems = $problems }
     if ($ip.alternate) {
         $alt = $ip.alternate
-        $rows.Add(@($ip.ip, $alt.keyType, $alt.tls.version, $alt.overall, (Get-Problems $alt.analysis)))
+        [pscustomobject]@{ IP = $ip.ip; Key = $alt.keyType; TLS = $alt.tls.version; Result = $alt.overall; Problems = Get-Problems $alt.analysis }
     }
 }
-
-# Pad the first four columns to their widest value, like the bash and Python versions.
-$widths = foreach ($i in 0..3) { ($rows | ForEach-Object { "$($_[$i])".Length } | Measure-Object -Maximum).Maximum }
-foreach ($row in $rows) {
-    $line = (0..3 | ForEach-Object { "$($row[$_])".PadRight($widths[$_] + 2) }) -join ''
-    ($line + $row[4]).TrimEnd()
-}
+($rows | Format-Table -AutoSize -Wrap | Out-String -Width 200).Trim()
 ''
 
 $overall = 'pass'
