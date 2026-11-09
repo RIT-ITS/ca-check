@@ -33,6 +33,7 @@
           <li><a href="#check">Check a server</a></li>
           <li><a href="#starttls">STARTTLS</a></li>
           <li><a href="#response">Response</a></li>
+          <li><a href="#scripts">Example scripts</a></li>
           <li><a href="#errors">Errors and limits</a></li>
           <li><a href="#other">Other endpoints</a></li>
           <li><a href="#links">Links to the web page</a></li>
@@ -134,6 +135,203 @@
   -H 'Content-Type: application/json' \
   -d '{"host": "www.example.edu"}' \
   | jq '.results[] | {ip, overall, error}'</code></pre>
+
+      <h2 id="scripts">Example scripts</h2>
+      <p>Each script checks one host and prints a table with one row per IP address and certificate. A server with both an RSA and an ECDSA certificate gets a row for each. The table lists the checks that warned or failed, then the consistency check and an overall result: the worst IP result, or the consistency result if it warns or fails.</p>
+      <p>They use this server unless you set <code>CACHECK_URL</code>. The exit code makes them usable in CI and monitoring: <code>0</code> pass, <code>1</code> warn, <code>2</code> fail, <code>3</code> the request failed. Run them as <code>./cacheck.sh HOST [PORT]</code>, for example:</p>
+      <pre class="code"><code>$ ./cacheck.sh expired.badssl.com
+IP              KEY  TLS      RESULT  PROBLEMS
+104.154.89.105  rsa  TLS 1.2  fail    validity (fail), extra_certs (warn)
+
+Consistency: info. Only one IP was tested.
+Overall: fail</code></pre>
+
+      <h3 id="script-bash">Bash and jq</h3>
+      <p>Needs <code>curl</code> and <code>jq</code>. Save as <code>cacheck.sh</code>.</p>
+      <pre class="code"><code>#!/usr/bin/env bash
+# Usage: ./cacheck.sh HOST [PORT]
+# Prints one row per IP and certificate. Exit code: 0 pass, 1 warn, 2 fail, 3 request failed.
+set -euo pipefail
+host=${1:?usage: cacheck.sh HOST [PORT]}
+port=${2:-0}
+api="${CACHECK_URL:-<span data-origin>https://this-server</span>}/api/check"
+
+body=$(jq -n --arg host "$host" --argjson port "$port" '{host: $host, port: $port}')
+out=$(curl -sS -w '\n%{http_code}' -H 'Content-Type: application/json' -d "$body" "$api")
+code=${out##*$'\n'}
+resp=${out%$'\n'*}
+if [[ $code != 200 ]]; then
+  echo "HTTP $code: $(jq -r '.error' &lt;&lt;&lt;"$resp" 2&gt;/dev/null || echo "$resp")" &gt;&amp;2
+  exit 3
+fi
+
+# The overall result is the worst IP result, or the consistency check if it warns or fails.
+overall=$(jq -r '[.results[].overall, (.consistency.status // empty | select(. == "warn" or . == "fail"))]
+  | map({"pass": 0, "info": 1, "warn": 2, "fail": 3}[.] // 0) | max
+  | ["pass", "info", "warn", "fail"][.]' &lt;&lt;&lt;"$resp")
+
+jq -r --arg overall "$overall" '
+  def problems: [.checks[]? | select(.status == "warn" or .status == "fail") | "\(.id) (\(.status))"] | join(", ");
+  ( [["IP", "KEY", "TLS", "RESULT", "PROBLEMS"]]
+    + [ .results[] as $r
+        | ( [$r.ip, ($r.keyType // "-"), ($r.tls.version // "-"),
+             ($r.analysis.overall // $r.overall), ($r.error // $r.denyReason // ($r.analysis | problems))] ),
+          ( $r.alternate // empty
+            | [$r.ip, .keyType, .tls.version, .overall, (.analysis | problems)] ) ]
+  ) as $rows
+  | [range(0; 4) as $i | $rows | map(.[$i] | length) | max] as $width
+  | ( $rows[] | [range(0; 4) as $i | .[$i] + " " * ($width[$i] - (.[$i] | length) + 2)] + [.[4]] | add ),
+    "",
+    ( .consistency // empty | "Consistency: \(.status). \(.detail)" ),
+    "Overall: \($overall)"
+' &lt;&lt;&lt;"$resp"
+
+case $overall in
+  fail) exit 2 ;;
+  warn) exit 1 ;;
+esac</code></pre>
+
+      <h3 id="script-powershell">PowerShell</h3>
+      <p>Tested with PowerShell 7 (<code>pwsh</code>) on Linux. Save as <code>cacheck.ps1</code>.</p>
+      <pre class="code"><code>#!/usr/bin/env pwsh
+# Usage: ./cacheck.ps1 HOST [PORT]
+# Prints one row per IP and certificate. Exit code: 0 pass, 1 warn, 2 fail, 3 request failed.
+param(
+    [Parameter(Mandatory = $true)][string]$HostName,
+    [int]$Port = 0,
+    [string]$Server = $(if ($env:CACHECK_URL) { $env:CACHECK_URL } else { '<span data-origin>https://this-server</span>' })
+)
+$ErrorActionPreference = 'Stop'
+$rank = @{ pass = 0; info = 1; warn = 2; fail = 3 }
+
+function Get-Problems($analysis) {
+    @($analysis.checks | Where-Object { $_.status -in 'warn', 'fail' } |
+        ForEach-Object { "$($_.id) ($($_.status))" }) -join ', '
+}
+
+$body = @{ host = $HostName; port = $Port } | ConvertTo-Json
+try {
+    $r = Invoke-RestMethod -Method Post -Uri "$Server/api/check" -ContentType 'application/json' -Body $body -TimeoutSec 180
+} catch {
+    $msg = $_.Exception.Message
+    if ($_.ErrorDetails.Message) {
+        $msg = $_.ErrorDetails.Message
+        try { $msg = ($msg | ConvertFrom-Json).error } catch { }
+    }
+    [Console]::Error.WriteLine("Request failed: $msg")
+    exit 3
+}
+
+$rows = foreach ($ip in $r.results) {
+    if ($ip.analysis) {
+        $result = $ip.analysis.overall
+        $problems = Get-Problems $ip.analysis
+    } else {
+        $result = $ip.overall
+        $problems = "$($ip.error)$($ip.denyReason)"
+    }
+    [pscustomobject]@{ IP = $ip.ip; Key = $(if ($ip.keyType) { $ip.keyType } else { '-' }); TLS = $(if ($ip.tls) { $ip.tls.version } else { '-' }); Result = $result; Problems = $problems }
+    if ($ip.alternate) {
+        $alt = $ip.alternate
+        [pscustomobject]@{ IP = $ip.ip; Key = $alt.keyType; TLS = $alt.tls.version; Result = $alt.overall; Problems = Get-Problems $alt.analysis }
+    }
+}
+($rows | Format-Table -AutoSize -Wrap | Out-String -Width 200).Trim()
+''
+
+$overall = 'pass'
+$statuses = @($r.results | ForEach-Object { $_.overall })
+if ($r.consistency) {
+    if ($r.consistency.status -in 'warn', 'fail') { $statuses += $r.consistency.status }
+    "Consistency: $($r.consistency.status). $($r.consistency.detail)"
+}
+foreach ($s in $statuses) { if ($rank[$s] -gt $rank[$overall]) { $overall = $s } }
+"Overall: $overall"
+if ($overall -eq 'fail') { exit 2 }
+if ($overall -eq 'warn') { exit 1 }
+exit 0</code></pre>
+
+      <h3 id="script-python">Python</h3>
+      <p>Uses only the standard library. The first line runs it with <a href="https://docs.astral.sh/uv/">uv</a>, which picks a suitable Python. Save as <code>cacheck.py</code> and make it executable.</p>
+      <pre class="code"><code>#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = "&gt;=3.9"
+# dependencies = []
+# ///
+"""Usage: ./cacheck.py HOST [PORT]
+
+Prints one row per IP and certificate. Exit code: 0 pass, 1 warn, 2 fail, 3 request failed.
+"""
+import json
+import os
+import sys
+import urllib.error
+import urllib.request
+
+RANK = {"pass": 0, "info": 1, "warn": 2, "fail": 3}
+
+
+def problems(analysis):
+    return ", ".join(
+        f"{c['id']} ({c['status']})"
+        for c in (analysis or {}).get("checks", [])
+        if c["status"] in ("warn", "fail")
+    )
+
+
+def main():
+    if len(sys.argv) &lt; 2:
+        sys.exit(__doc__)
+    server = os.environ.get("CACHECK_URL", "<span data-origin>https://this-server</span>")
+    body = {"host": sys.argv[1], "port": int(sys.argv[2]) if len(sys.argv) &gt; 2 else 0}
+    req = urllib.request.Request(
+        f"{server}/api/check",
+        data=json.dumps(body).encode(),
+        headers={"Content-Type": "application/json", "User-Agent": "cacheck-example"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=180) as resp:
+            data = json.load(resp)
+    except urllib.error.HTTPError as e:
+        try:
+            msg = json.load(e).get("error", "")
+        except ValueError:
+            msg = e.reason
+        print(f"HTTP {e.code}: {msg}", file=sys.stderr)
+        sys.exit(3)
+    except urllib.error.URLError as e:
+        print(f"Request failed: {e.reason}", file=sys.stderr)
+        sys.exit(3)
+
+    rows = [("IP", "KEY", "TLS", "RESULT", "PROBLEMS")]
+    for r in data["results"]:
+        analysis = r.get("analysis")
+        rows.append((
+            r["ip"],
+            r.get("keyType") or "-",
+            (r.get("tls") or {}).get("version", "-"),
+            analysis["overall"] if analysis else r["overall"],
+            problems(analysis) if analysis else r.get("error") or r.get("denyReason") or "",
+        ))
+        if alt := r.get("alternate"):
+            rows.append((r["ip"], alt["keyType"], alt["tls"]["version"], alt["overall"], problems(alt["analysis"])))
+
+    widths = [max(len(row[i]) for row in rows) for i in range(4)]
+    for row in rows:
+        print("  ".join(cell.ljust(w) for cell, w in zip(row, widths)) + "  " + row[4])
+
+    statuses = [r["overall"] for r in data["results"]]
+    if consistency := data.get("consistency"):
+        if consistency["status"] in ("warn", "fail"):
+            statuses.append(consistency["status"])
+        print(f"\nConsistency: {consistency['status']}. {consistency['detail']}")
+    overall = max(statuses, key=lambda s: RANK.get(s, 0))
+    print(f"Overall: {overall}")
+    sys.exit({"warn": 1, "fail": 2}.get(overall, 0))
+
+
+if __name__ == "__main__":
+    main()</code></pre>
 
       <h2 id="errors">Errors and limits</h2>
       <ul>
