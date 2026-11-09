@@ -186,6 +186,40 @@
           }
         }
       }
+    },
+    "/readyz": {
+      "get": {
+        "tags": [
+          "service"
+        ],
+        "operationId": "readyz",
+        "summary": "Readiness check",
+        "description": "Fails with 503 once the server has started shutting down, so load balancers stop sending it new requests while it finishes the ones it has.",
+        "responses": {
+          "200": {
+            "description": "The service is accepting requests.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "example": "ok\n"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The service is shutting down.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "example": "shutting down\n"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {

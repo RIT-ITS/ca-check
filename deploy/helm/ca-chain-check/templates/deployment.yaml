@@ -9,6 +9,8 @@ spec:
   {{- end }}
   selector:
     matchLabels: {{- include "ccc.selectorLabels" . | nindent 6 }}
+  strategy: {{- toYaml .Values.strategy | nindent 4 }}
+  minReadySeconds: {{ .Values.minReadySeconds }}
   template:
     metadata:
       annotations:
@@ -22,6 +24,7 @@ spec:
       imagePullSecrets: {{- toYaml . | nindent 8 }}
       {{- end }}
       automountServiceAccountToken: false
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
       securityContext: {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: app
@@ -45,9 +48,12 @@ spec:
           livenessProbe:
             httpGet: { path: /healthz, port: http }
             periodSeconds: 20
+          # /readyz fails as soon as the pod starts shutting down; /healthz does not,
+          # so a draining pod is never restarted mid-check.
           readinessProbe:
-            httpGet: { path: /healthz, port: http }
-            periodSeconds: 10
+            httpGet: { path: /readyz, port: http }
+            periodSeconds: 5
+            failureThreshold: 1
           resources: {{- toYaml .Values.resources | nindent 12 }}
       volumes:
         - name: pending-distrust

@@ -37,7 +37,7 @@ make run              # http://127.0.0.1:8080 (reads .env if present)
 
 `starttls` is optional (see above). `connectIPs` is optional and works like `curl --resolve`: the server connects to those IPs but still sends the hostname as SNI. The response has one entry in `results[]` per IP, each with its TLS info, chain analysis and Mermaid source.
 
-`GET /api/config` returns the UI flags. `GET /healthz` is the liveness check. The page at `/help` documents the API for users, with examples. `examples/` has bash, PowerShell and Python scripts that print a summary table; the help page shows the same scripts, and a test fails if they differ. `/swagger` is an interactive Swagger UI reference built from `web/openapi.json` (OpenAPI 3.0.3); a test fails if the spec and the Go types drift apart. Swagger UI is vendored in `web/vendor/swagger-ui` (`make refresh-swagger`), so no outside scripts are loaded.
+`GET /api/config` returns the UI flags. `GET /healthz` is the liveness check and `GET /readyz` the readiness check. The page at `/help` documents the API for users, with examples. `examples/` has bash, PowerShell and Python scripts that print a summary table; the help page shows the same scripts, and a test fails if they differ. `/swagger` is an interactive Swagger UI reference built from `web/openapi.json` (OpenAPI 3.0.3); a test fails if the spec and the Go types drift apart. Swagger UI is vendored in `web/vendor/swagger-ui` (`make refresh-swagger`), so no outside scripts are loaded.
 
 ## Target access policy
 
@@ -123,6 +123,8 @@ All app settings are under `config.*`. The chart can also create:
 - a NetworkPolicy that limits egress to DNS and the TLS ports you list
 
 For TLS on the Traefik `IngressRoute`, set `traefik.ingressRoute.tls.certResolver` (Traefik ACME), `tls.secretName` (an existing secret) or `tls.clusterIssuer` (cert-manager: the chart creates a `Certificate` for the host, stored in `<fullname>-tls`). `traefik.ingressRoute.annotations` adds annotations to the route.
+
+**Rolling updates** don't cut off running checks. The chart starts a new pod and waits for it to be ready before stopping an old one (`maxSurge: 1`, `maxUnavailable: 0`). On SIGTERM a pod fails `/readyz`, keeps serving for `SHUTDOWN_DELAY` (default 5s) while the ingress stops sending it traffic, then closes its listener and waits for running checks, up to the longest a check can take (50s with the default timeouts). `terminationGracePeriodSeconds` (75) must stay above that total; raise it if you raise the timeouts. Compose sets `stop_grace_period: 75s` for the same reason, though with one container a recreate still has a short gap.
 
 Site-specific values (image registry, hosts, pull secrets) can go in `deploy/helm/values.local.yaml`, which git ignores. Pass it with `-f deploy/helm/values.local.yaml`.
 

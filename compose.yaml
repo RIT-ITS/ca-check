@@ -11,6 +11,8 @@ services:
     image: localhost/ca-chain-check:latest
     env_file: .env
     restart: unless-stopped
+    # Let running checks finish on stop: SHUTDOWN_DELAY + the longest check (50s by default) + 5s.
+    stop_grace_period: 75s
     read_only: true
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
@@ -37,8 +39,8 @@ services:
       traefik.http.middlewares.ca-chain-check-ratelimit.ratelimit.period: 1m
       traefik.http.middlewares.ca-chain-check-ratelimit.ratelimit.sourcecriterion.requestheadername: ${TRAEFIK_RATELIMIT_HEADER:-}
       traefik.http.services.ca-chain-check.loadbalancer.server.port: "8080"
-      traefik.http.services.ca-chain-check.loadbalancer.healthcheck.path: /healthz
-      traefik.http.services.ca-chain-check.loadbalancer.healthcheck.interval: 30s
+      traefik.http.services.ca-chain-check.loadbalancer.healthcheck.path: /readyz
+      traefik.http.services.ca-chain-check.loadbalancer.healthcheck.interval: 3s
 
 networks:
   traefik:

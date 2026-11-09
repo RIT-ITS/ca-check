@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"ca-chain-check/internal/config"
@@ -30,7 +31,13 @@ type Server struct {
 	Prober  *probe.Prober
 	Store   *truststore.Store
 	Static  fs.FS
+
+	draining atomic.Bool
 }
+
+// Drain makes /readyz fail so load balancers stop sending new requests.
+// Requests keep being served; the caller shuts the listener down later.
+func (s *Server) Drain() { s.draining.Store(true) }
 
 // Handler returns the root HTTP handler.
 func (s *Server) Handler() http.Handler {
@@ -39,6 +46,15 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/config", s.config)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
+		_, _ = w.Write([]byte("ok\n"))
+	})
+	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		if s.draining.Load() {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte("shutting down\n"))
+			return
+		}
 		_, _ = w.Write([]byte("ok\n"))
 	})
 	themeCSS := []byte(theme.CSS(s.Cfg.Theme))
@@ -147,11 +163,7 @@ func (s *Server) check(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// DNS + connect, a TLS attempt and a STARTTLS retry, then OCSP/CRL fetches.
-	// Main handshake (with a possible STARTTLS retry), the other key type's
-	// handshake, and revocation for both chains.
-	budget := s.Cfg.DialTimeout*4 + s.Cfg.HandshakeTimeout*3 + s.Cfg.RevocationTimeout*2 + 5*time.Second
-	ctx, cancel := context.WithTimeout(r.Context(), budget)
+	ctx, cancel := context.WithTimeout(r.Context(), s.Cfg.CheckBudget())
 	defer cancel()
 
 	host, ips, res, err := s.Prober.Plan(ctx, client, &req)

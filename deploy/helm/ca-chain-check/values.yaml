@@ -1,5 +1,20 @@
 replicaCount: 2
 
+# Rolling updates start a new pod and wait for it to be ready before stopping an
+# old one. A stopping pod fails /readyz, keeps serving for config.shutdownDelay
+# while the ingress stops sending it traffic, then finishes the checks it is
+# running before it exits.
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
+minReadySeconds: 5
+# Must be more than config.shutdownDelay + the longest check + 5s. The longest
+# check is 4 x dialTimeout + 3 x handshakeTimeout + 2 x revocationTimeout + 5s
+# (50s with the defaults), so 5 + 50 + 5 = 60s; 75s leaves a margin.
+terminationGracePeriodSeconds: 75
+
 image:
   repository: ghcr.io/example/ca-chain-check
   tag: ""            # defaults to .Chart.AppVersion
@@ -78,6 +93,8 @@ config:
   disableIPv6: false
   allowedPorts: ""
 
+  # How long a stopping pod keeps accepting requests while the ingress removes it.
+  shutdownDelay: 5s
   dialTimeout: 5s
   handshakeTimeout: 5s
   # OCSP and CRL checks for the best path. Needs egress to ports 80 and 443

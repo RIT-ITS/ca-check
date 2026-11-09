@@ -251,3 +251,27 @@ func TestCheckWithoutTrustStore(t *testing.T) {
 		}
 	}
 }
+
+func TestReadyzFailsWhileDraining(t *testing.T) {
+	cfg, err := config.LoadFrom(func(string) string { return "" })
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := &Server{Cfg: cfg, Static: fstest.MapFS{"index.html": {Data: []byte("hi")}}}
+	h := s.Handler()
+	get := func(path string) int {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest("GET", path, nil))
+		return w.Code
+	}
+	if c := get("/readyz"); c != http.StatusOK {
+		t.Fatalf("readyz before drain = %d, want 200", c)
+	}
+	s.Drain()
+	if c := get("/readyz"); c != http.StatusServiceUnavailable {
+		t.Fatalf("readyz while draining = %d, want 503", c)
+	}
+	if c := get("/healthz"); c != http.StatusOK {
+		t.Fatalf("healthz while draining = %d, want 200 (liveness must not restart a draining pod)", c)
+	}
+}

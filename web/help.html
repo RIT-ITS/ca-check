@@ -355,6 +355,7 @@ if __name__ == "__main__":
       <ul>
         <li><code>GET /api/config</code> returns <code>ipOverrideAllowed</code> (whether you may send <code>connectIPs</code>) and the trust store's size and age.</li>
         <li><code>GET /healthz</code> returns <code>ok</code> while the service is running.</li>
+        <li><code>GET /readyz</code> returns <code>ok</code>, or 503 once the service has started shutting down.</li>
       </ul>
 
       <h2 id="links">Links to the web page</h2>

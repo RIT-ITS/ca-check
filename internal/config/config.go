@@ -59,6 +59,10 @@ type Config struct {
 
 	DialTimeout      time.Duration
 	HandshakeTimeout time.Duration
+	// ShutdownDelay is how long the server keeps accepting requests after
+	// SIGTERM (while /readyz reports 503) so load balancers stop sending
+	// traffic before it closes its listener.
+	ShutdownDelay time.Duration
 
 	CheckRevocation   bool          // ask OCSP responders and CRLs about the best path
 	CheckAltKeyType   bool          // also ask for the other key type's certificate (RSA/ECDSA)
@@ -127,6 +131,9 @@ func LoadFrom(get func(string) string) (*Config, error) {
 		if *d.dst, err = time.ParseDuration(str(d.key, d.def)); err != nil || *d.dst <= 0 {
 			return nil, fail(d.key, fmt.Errorf("must be a positive duration"))
 		}
+	}
+	if c.ShutdownDelay, err = time.ParseDuration(str("SHUTDOWN_DELAY", "5s")); err != nil || c.ShutdownDelay < 0 {
+		return nil, fail("SHUTDOWN_DELAY", fmt.Errorf("must be a duration of 0 or more"))
 	}
 
 	cidrs := []struct {
@@ -353,4 +360,11 @@ func parseStores(s string) ([]string, error) {
 		return nil, fmt.Errorf("REQUIRED_TRUST_STORES: name at least one store")
 	}
 	return out, nil
+}
+
+// CheckBudget is the longest one check request may run: DNS and connect, a
+// TLS attempt and a STARTTLS retry, the other key type's handshake, and
+// OCSP or CRL fetches for both chains.
+func (c *Config) CheckBudget() time.Duration {
+	return c.DialTimeout*4 + c.HandshakeTimeout*3 + c.RevocationTimeout*2 + 5*time.Second
 }

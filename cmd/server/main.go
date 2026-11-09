@@ -70,7 +70,7 @@ func main() {
 		Handler:           srv.Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
-		WriteTimeout:      60 * time.Second,
+		WriteTimeout:      cfg.CheckBudget() + 10*time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
 	go func() {
@@ -82,9 +82,23 @@ func main() {
 		}
 	}()
 	<-ctx.Done()
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	stop() // a second SIGTERM or Ctrl-C now exits at once
+
+	// Graceful shutdown, so a rolling update doesn't cut off running checks:
+	// 1. fail /readyz and stop reusing idle connections, but keep accepting
+	//    requests for ShutdownDelay while load balancers notice;
+	// 2. close the listener and wait for running checks, up to one check budget.
+	srv.Drain()
+	hs.SetKeepAlivesEnabled(false)
+	slog.Info("shutting down", "delay", cfg.ShutdownDelay.String(), "maxWait", cfg.CheckBudget().String())
+	time.Sleep(cfg.ShutdownDelay)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.CheckBudget()+5*time.Second)
 	defer cancel()
-	_ = hs.Shutdown(shutdownCtx)
+	if err := hs.Shutdown(shutdownCtx); err != nil {
+		slog.Warn("shutdown timed out with requests still running", "err", err)
+		return
+	}
+	slog.Info("shut down cleanly")
 }
 
 // healthcheck probes the local /healthz endpoint (for container healthchecks
