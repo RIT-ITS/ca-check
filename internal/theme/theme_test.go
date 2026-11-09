@@ -1,6 +1,10 @@
 package theme
 
 import (
+	"bytes"
+	"encoding/binary"
+	"image/color"
+	"image/png"
 	"os"
 	"strings"
 	"testing"
@@ -61,6 +65,47 @@ func TestDefaultsMatchStylesheet(t *testing.T) {
 	for tok := range Tokens {
 		if !strings.Contains(string(css), "--"+tok+":") {
 			t.Errorf("token %q is not defined in styles.css", tok)
+		}
+	}
+}
+
+func TestRasterIcons(t *testing.T) {
+	es, err := Parse("bar=101010 bar-edge=c0ffee")
+	if err != nil {
+		t.Fatal(err)
+	}
+	img, err := png.Decode(bytes.NewReader(IconPNG(es, 32, true)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	at := func(x, y int) color.NRGBA { return color.NRGBAModel.Convert(img.At(x, y)).(color.NRGBA) }
+	for _, c := range []struct {
+		x, y int
+		want color.NRGBA
+	}{
+		{0, 0, color.NRGBA{}},                        // rounded corner is transparent
+		{3, 20, color.NRGBA{0x10, 0x10, 0x10, 255}},  // bar
+		{16, 30, color.NRGBA{0xc0, 0xff, 0xee, 255}}, // bottom band
+		{11, 9, color.NRGBA{255, 255, 255, 255}},     // stroke
+	} {
+		if got := at(c.x, c.y); got != c.want {
+			t.Errorf("pixel (%d,%d) = %v, want %v", c.x, c.y, got, c.want)
+		}
+	}
+	touch, _ := png.Decode(bytes.NewReader(IconPNG(es, 180, false)))
+	if _, _, _, a := touch.At(0, 0).RGBA(); a != 0xffff {
+		t.Error("apple-touch-icon corner should be opaque")
+	}
+	ico := FaviconICO(es)
+	if len(ico) < 6 || ico[2] != 1 || ico[4] != 3 {
+		t.Fatalf("bad ICO header % x", ico[:6])
+	}
+	for i := 0; i < 3; i++ {
+		e := ico[6+16*i:]
+		size, off := int(e[0]), int(binary.LittleEndian.Uint32(e[12:]))
+		m, err := png.Decode(bytes.NewReader(ico[off:]))
+		if err != nil || m.Bounds().Dx() != size {
+			t.Errorf("ICO image %d: size %d, err %v", i, size, err)
 		}
 	}
 }

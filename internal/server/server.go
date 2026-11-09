@@ -59,6 +59,8 @@ func (s *Server) Handler() http.Handler {
 	})
 	themeCSS := []byte(theme.CSS(s.Cfg.Theme))
 	favicon := theme.Favicon(s.Cfg.Theme)
+	faviconICO := theme.FaviconICO(s.Cfg.Theme)
+	touchIcon := theme.IconPNG(s.Cfg.Theme, 180, false)
 	ver := assetVersion(s.Static, themeCSS)
 	index := versionedPage(s.Static, "index.html", ver)
 	help := versionedPage(s.Static, "help.html", ver)
@@ -72,6 +74,17 @@ func (s *Server) Handler() http.Handler {
 		w.Header().Set("Content-Type", "image/svg+xml")
 		cacheFor(w, r)
 		_, _ = w.Write(favicon)
+	})
+	// Raster copies for browsers and tools that ask for these fixed paths.
+	mux.HandleFunc("GET /favicon.ico", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/x-icon")
+		cacheFor(w, r)
+		_, _ = w.Write(faviconICO)
+	})
+	mux.HandleFunc("GET /apple-touch-icon.png", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/png")
+		cacheFor(w, r)
+		_, _ = w.Write(touchIcon)
 	})
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -225,7 +238,7 @@ func versionedPage(static fs.FS, name, ver string) []byte {
 		return []byte(name + " missing")
 	}
 	out := string(b)
-	for _, a := range []string{"styles.css", "theme.css", "app.js", "help.js", "swagger.js", "favicon.svg", "vendor/mermaid.min.js",
+	for _, a := range []string{"styles.css", "theme.css", "app.js", "help.js", "swagger.js", "favicon.svg", "favicon.ico", "apple-touch-icon.png", "vendor/mermaid.min.js",
 		"vendor/swagger-ui/swagger-ui-bundle.js", "vendor/swagger-ui/swagger-ui.css"} {
 		out = strings.ReplaceAll(out, `="`+a+`"`, `="`+a+"?v="+ver+`"`)
 	}
