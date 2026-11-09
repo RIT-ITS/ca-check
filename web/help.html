@@ -138,7 +138,7 @@
 
       <h2 id="scripts">Example scripts</h2>
       <p>Each script checks one host and prints a table with one row per IP address and certificate. A server with both an RSA and an ECDSA certificate gets a row for each. The table lists the checks that warned or failed, then the consistency check and an overall result: the worst IP result, or the consistency result if it warns or fails.</p>
-      <p>They use this server unless you set <code>CACHECK_URL</code>. The exit code makes them usable in CI and monitoring: <code>0</code> pass, <code>1</code> warn, <code>2</code> fail, <code>3</code> the request failed. Run them as <code>./cacheck.sh HOST [PORT]</code>, for example:</p>
+      <p>They use this server unless you set <code>CACHECK_URL</code>. The same scripts are in the <code>examples</code> folder of the source code. The exit code makes them usable in CI and monitoring: <code>0</code> pass, <code>1</code> warn, <code>2</code> fail, <code>3</code> the request failed. Run them as <code>./cacheck.sh HOST [PORT]</code>, for example:</p>
       <pre class="code"><code>$ ./cacheck.sh expired.badssl.com
 IP              KEY  TLS      RESULT  PROBLEMS
 104.154.89.105  rsa  TLS 1.2  fail    validity (fail), extra_certs (warn)
@@ -157,7 +157,7 @@ port=${2:-0}
 api="${CACHECK_URL:-<span data-origin>https://this-server</span>}/api/check"
 
 body=$(jq -n --arg host "$host" --argjson port "$port" '{host: $host, port: $port}')
-out=$(curl -sS -w '\n%{http_code}' -H 'Content-Type: application/json' -d "$body" "$api")
+out=$(curl -sS -w '\n%{http_code}' -H 'Content-Type: application/json' -d "$body" "$api") || exit 3
 code=${out##*$'\n'}
 resp=${out%$'\n'*}
 if [[ $code != 200 ]]; then
