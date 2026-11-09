@@ -6,7 +6,7 @@ Each script checks one host with `POST /api/check` and prints a table with one r
 |---|---|
 | `cacheck.sh` | bash, `curl` and `jq` |
 | `cacheck.ps1` | PowerShell 7 (`pwsh`) |
-| `cacheck.py` | [uv](https://docs.astral.sh/uv/); standard library only |
+| `cacheck.py` | Python 3.8 or later; standard library only |
 
 Set `CACHECK_URL` to the server's address, then run `./cacheck.sh HOST [PORT]`:
 

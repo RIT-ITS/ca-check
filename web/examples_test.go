@@ -21,7 +21,7 @@ func TestHelpExamplesMatchRepo(t *testing.T) {
 		"script-powershell": "cacheck.ps1",
 		"script-python":     "cacheck.py",
 	} {
-		re := regexp.MustCompile(`(?s)<h3 id="` + id + `">.*?<pre class="code"><code>(.*?)</code></pre>`)
+		re := regexp.MustCompile(`(?s)<h3 id="` + id + `">.*?<pre class="code"[^>]*><code>(.*?)</code></pre>`)
 		m := re.FindSubmatch(page)
 		if m == nil {
 			t.Errorf("help.html: no code block after #%s", id)

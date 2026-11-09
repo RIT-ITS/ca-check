@@ -369,7 +369,7 @@ table.paths { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); m
 .doc-brand { padding: var(--s4) 0; }
 .doc-brand .brand-name { color: inherit; text-decoration: none; }
 .doc-brand .brand-name:hover { text-decoration: underline; text-decoration-color: var(--bar-edge); }
-.doc { padding: var(--s5); margin: var(--s5) 0; max-width: 46rem; }
+.doc { padding: var(--s5) var(--s6); margin: var(--s5) 0; min-width: 0; }
 .doc h1 { font-size: var(--fs-2xl); margin: 0 0 var(--s2); letter-spacing: -0.01em; }
 .doc h2 { font-size: var(--fs-lg); margin: var(--s6) 0 var(--s2); padding-top: var(--s4); border-top: 1px solid var(--rule); }
 .doc h3 { font-size: var(--fs-md); margin: var(--s5) 0 var(--s2); }
@@ -377,10 +377,29 @@ table.paths { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); m
 .doc ul { padding-left: 1.25em; }
 .doc li { margin: var(--s1) 0; }
 .doc code { font-family: var(--mono); font-size: 0.9em; overflow-wrap: break-word; }
-.doc .doc-toc { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: var(--s1) var(--s4); font-size: var(--fs-sm); }
+/* Help page: sticky section list on the left, wide sheet on the right. */
+.doc-layout { display: grid; grid-template-columns: 13rem minmax(0, 1fr); gap: var(--s5); align-items: start; }
+.doc-nav { position: sticky; top: 0; max-height: 100vh; overflow-y: auto; padding: var(--s5) 0; font-size: var(--fs-sm); }
+.doc-nav-title { margin: 0 0 var(--s2); font-size: var(--fs-xs); font-weight: 700; color: var(--muted); }
+.doc-nav ul { list-style: none; margin: 0; padding: 0; }
+.doc-nav > ul { border-left: 1px solid var(--rule); }
+.doc-nav a { display: block; padding: 5px var(--s3); color: var(--muted); text-decoration: none; border-radius: 0 3px 3px 0; }
+.doc-nav ul ul a { padding-left: var(--s5); }
+.doc-nav a:hover { color: var(--ink); text-decoration: underline; }
+.doc-nav a[aria-current="true"] { color: var(--ink); font-weight: 600; background: var(--sheet); }
+.code-head { display: flex; justify-content: space-between; align-items: center; gap: var(--s3); margin: var(--s3) 0 calc(-1 * var(--s3) + var(--s1)); font-size: var(--fs-xs); color: var(--muted); }
+.code-head code { font-size: inherit; }
+@media (max-width: 960px) {
+  .doc-layout { display: block; }
+  .doc-nav { position: static; max-height: none; padding: var(--s4) 0 0; }
+  .doc-nav > ul { border-left: 0; display: flex; flex-wrap: wrap; gap: var(--s1) var(--s4); }
+  .doc-nav ul ul { display: none; }
+  .doc-nav a { padding: var(--s1) 0; }
+  .doc { margin-top: var(--s4); }
+}
 pre.code { margin: var(--s3) 0; padding: var(--s3); background: var(--sheet-alt); border: 1px solid var(--rule); border-radius: 3px; font: var(--fs-xs)/1.5 var(--mono); overflow-x: auto; }
 pre.code code { font-size: inherit; overflow-wrap: normal; }
-table.params { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); margin: var(--s3) 0; }
+table.params { width: 100%; max-width: 42rem; border-collapse: collapse; font-size: var(--fs-sm); margin: var(--s3) 0; }
 .params th { text-align: left; font-size: var(--fs-xs); font-weight: 700; color: var(--muted); padding: var(--s2) var(--s3); border-bottom: 1px solid var(--rule-strong); }
 .params td { padding: var(--s2) var(--s3); border-bottom: 1px solid var(--rule); vertical-align: top; }
 .params td:first-child { white-space: nowrap; }

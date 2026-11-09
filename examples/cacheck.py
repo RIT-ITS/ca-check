@@ -1,11 +1,8 @@
-#!/usr/bin/env -S uv run --script
-# /// script
-# requires-python = ">=3.9"
-# dependencies = []
-# ///
+#!/usr/bin/env python3
 """Usage: ./cacheck.py HOST [PORT]
 
 Prints one row per IP and certificate. Exit code: 0 pass, 1 warn, 2 fail, 3 request failed.
+Needs Python 3.8 or later and nothing outside the standard library.
 """
 import json
 import os

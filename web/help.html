@@ -22,23 +22,31 @@
     </div>
   </header>
 
-  <main id="doc" class="wrap" tabindex="-1">
+  <div class="wrap doc-layout">
+    <nav class="doc-nav" aria-labelledby="doc-nav-title">
+      <p id="doc-nav-title" class="doc-nav-title">On this page</p>
+      <ul>
+        <li><a href="#check">Check a server</a></li>
+        <li><a href="#starttls">STARTTLS</a></li>
+        <li><a href="#response">Response</a></li>
+        <li><a href="#scripts">Example scripts</a>
+          <ul>
+            <li><a href="#script-bash">Bash and jq</a></li>
+            <li><a href="#script-powershell">PowerShell</a></li>
+            <li><a href="#script-python">Python</a></li>
+          </ul>
+        </li>
+        <li><a href="#errors">Errors and limits</a></li>
+        <li><a href="#other">Other endpoints</a></li>
+        <li><a href="#links">Links to the web page</a></li>
+      </ul>
+    </nav>
+
+  <main id="doc" tabindex="-1">
     <article class="sheet doc">
       <h1>Using the API</h1>
       <p>CA Chain Check has a small JSON API. The web page uses the same API, so anything the page shows is also in the API response.</p>
       <p>For every field and a way to try requests in the browser, see the <a href="swagger">interactive API reference</a> (Swagger), or download the OpenAPI spec as <a href="openapi.json">openapi.json</a>.</p>
-
-      <nav aria-label="On this page">
-        <ul class="doc-toc">
-          <li><a href="#check">Check a server</a></li>
-          <li><a href="#starttls">STARTTLS</a></li>
-          <li><a href="#response">Response</a></li>
-          <li><a href="#scripts">Example scripts</a></li>
-          <li><a href="#errors">Errors and limits</a></li>
-          <li><a href="#other">Other endpoints</a></li>
-          <li><a href="#links">Links to the web page</a></li>
-        </ul>
-      </nav>
 
       <h2 id="check">Check a server</h2>
       <p>Send a <code>POST</code> to <code><span data-origin>https://this-server</span>/api/check</code> with a JSON body:</p>
@@ -148,7 +156,7 @@ Overall: fail</code></pre>
 
       <h3 id="script-bash">Bash and jq</h3>
       <p>Needs <code>curl</code> and <code>jq</code>. Save as <code>cacheck.sh</code>.</p>
-      <pre class="code"><code>#!/usr/bin/env bash
+      <pre class="code" data-copy="cacheck.sh"><code>#!/usr/bin/env bash
 # Usage: ./cacheck.sh HOST [PORT]
 # Prints one row per IP and certificate. Exit code: 0 pass, 1 warn, 2 fail, 3 request failed.
 set -euo pipefail
@@ -193,7 +201,7 @@ esac</code></pre>
 
       <h3 id="script-powershell">PowerShell</h3>
       <p>Tested with PowerShell 7 (<code>pwsh</code>) on Linux. Save as <code>cacheck.ps1</code>.</p>
-      <pre class="code"><code>#!/usr/bin/env pwsh
+      <pre class="code" data-copy="cacheck.ps1"><code>#!/usr/bin/env pwsh
 # Usage: ./cacheck.ps1 HOST [PORT]
 # Prints one row per IP and certificate. Exit code: 0 pass, 1 warn, 2 fail, 3 request failed.
 param(
@@ -252,15 +260,12 @@ if ($overall -eq 'warn') { exit 1 }
 exit 0</code></pre>
 
       <h3 id="script-python">Python</h3>
-      <p>Uses only the standard library. The first line runs it with <a href="https://docs.astral.sh/uv/">uv</a>, which picks a suitable Python. Save as <code>cacheck.py</code> and make it executable.</p>
-      <pre class="code"><code>#!/usr/bin/env -S uv run --script
-# /// script
-# requires-python = "&gt;=3.9"
-# dependencies = []
-# ///
+      <p>Needs Python 3.8 or later and nothing outside the standard library. Save as <code>cacheck.py</code>.</p>
+      <pre class="code" data-copy="cacheck.py"><code>#!/usr/bin/env python3
 """Usage: ./cacheck.py HOST [PORT]
 
 Prints one row per IP and certificate. Exit code: 0 pass, 1 warn, 2 fail, 3 request failed.
+Needs Python 3.8 or later and nothing outside the standard library.
 """
 import json
 import os
@@ -354,6 +359,8 @@ if __name__ == "__main__":
       <p><code>starttls</code> takes the same values as in the API and has no control on the page.</p>
     </article>
   </main>
+  </div>
+  <div id="announce" class="sr" role="status" aria-live="polite" aria-atomic="true"></div>
 
   <footer class="wrap foot">
     <a href="./">Back to CA Chain Check</a>
