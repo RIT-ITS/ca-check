@@ -107,7 +107,6 @@ func (s *Server) config(w http.ResponseWriter, r *http.Request) {
 	client := ratelimit.ClientIP(r, s.Cfg.TrustedProxies, s.Cfg.ClientIPHeader)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ipOverrideAllowed": s.Guard.OverrideAllowedFor(client),
-		"maxIPsPerHost":     s.Cfg.MaxIPsPerHost,
 		"trustStore":        s.Store.Info(),
 	})
 }

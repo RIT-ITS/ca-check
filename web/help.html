@@ -48,10 +48,10 @@
       <table class="params">
         <thead><tr><th scope="col">Field</th><th scope="col">Required</th><th scope="col">Meaning</th></tr></thead>
         <tbody>
-          <tr><td><code>host</code></td><td>Yes</td><td>Hostname or IP address. The hostname is sent as SNI.</td></tr>
+          <tr><td><code>host</code></td><td>Yes</td><td>Hostname or IP address. The hostname is sent as SNI. A URL also works; only its hostname is used. Put the port in <code>port</code>, not after the hostname.</td></tr>
           <tr><td><code>port</code></td><td>No</td><td>TCP port. Defaults to 443, or to the protocol's usual port when <code>starttls</code> names one.</td></tr>
           <tr><td><code>starttls</code></td><td>No</td><td><code>smtp</code>, <code>imap</code>, <code>pop3</code>, <code>ftp</code>, <code>ldap</code>, <code>postgres</code>, or <code>none</code>. See <a href="#starttls">STARTTLS</a>.</td></tr>
-          <tr><td><code>connectIPs</code></td><td>No</td><td>List of IP addresses to connect to instead of looking up the hostname, like <code>curl --resolve</code>. The hostname is still sent as SNI. This server may turn this off; <code>GET /api/config</code> says whether you can use it.</td></tr>
+          <tr><td><code>connectIPs</code></td><td>No</td><td>List of IP addresses to connect to instead of looking up the hostname, like <code>curl --resolve</code>. The hostname is still sent as SNI. This server may turn this off; <code>GET /api/config</code> says whether you can use it. Sending more addresses than this server allows is an error.</td></tr>
         </tbody>
       </table>
       <p>Every IP address the hostname resolves to is tested on its own. The body must be JSON, under 4 KB, with no other fields.</p>
@@ -137,15 +137,15 @@
 
       <h2 id="errors">Errors and limits</h2>
       <ul>
-        <li><strong>400:</strong> the request was not valid, for example a bad hostname or port. The body is <code>{"error": "..."}</code>.</li>
-        <li><strong>429:</strong> too many checks from your address. Wait for the number of seconds in the <code>Retry-After</code> header. A check costs one unit, plus one more for every four IP addresses tested.</li>
-        <li><strong>502:</strong> the hostname lookup failed.</li>
+        <li><strong>400:</strong> the request was not valid, for example a bad hostname or port, a hostname that does not resolve, or <code>connectIPs</code> when you may not use it. The body is <code>{"error": "..."}</code>.</li>
+        <li><strong>429:</strong> too many checks from your address. Wait for the number of seconds in the <code>Retry-After</code> header. A host with many IP addresses uses more of the limit than a host with one.</li>
+        <li><strong>502:</strong> the DNS lookup failed, for example because the resolver timed out.</li>
       </ul>
-      <p>A failed connection to one IP is not an HTTP error. It shows up as <code>error</code> on that IP's result.</p>
+      <p>A failed connection to one IP is not an HTTP error. It shows up as <code>error</code> on that IP's result. An address this server may not test, such as a private address, shows up with <code>tested: false</code> and <code>denyReason</code>.</p>
 
       <h2 id="other">Other endpoints</h2>
       <ul>
-        <li><code>GET /api/config</code> returns <code>ipOverrideAllowed</code> (whether you may send <code>connectIPs</code>), <code>maxIPsPerHost</code> and the trust store's size and age.</li>
+        <li><code>GET /api/config</code> returns <code>ipOverrideAllowed</code> (whether you may send <code>connectIPs</code>) and the trust store's size and age.</li>
         <li><code>GET /healthz</code> returns <code>ok</code> while the service is running.</li>
       </ul>
 

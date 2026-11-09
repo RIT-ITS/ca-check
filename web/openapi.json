@@ -29,7 +29,7 @@
         ],
         "operationId": "check",
         "summary": "Check a server's certificate chain",
-        "description": "Connects to every IP address the host resolves to (or to `connectIPs`), collects the chain each one sends, and analyzes it. A failed connection to one IP is reported on that IP's result, not as an HTTP error.\n\nEach check costs one rate-limit unit, plus one more for every four IP addresses tested.",
+        "description": "Connects to every IP address the host resolves to (or to `connectIPs`), collects the chain each one sends, and analyzes it. A failed connection to one IP is reported as `error` on that IP's result, and an address this server's policy does not allow (a private address, for example) is reported with `tested: false` and `denyReason`. Neither is an HTTP error.\n\nChecks are rate-limited per client address. A host with many IP addresses uses more of the limit than a host with one.",
         "requestBody": {
           "required": true,
           "content": {
@@ -86,7 +86,7 @@
             }
           },
           "400": {
-            "description": "The request was not valid, for example a bad hostname, port or STARTTLS protocol, or a private address this client may not test.",
+            "description": "The request was not valid: the body is not JSON, is over 4 KB or has an unknown field; the hostname, port, STARTTLS protocol or a connect IP is not valid; the hostname does not resolve; too many connect IPs; or `connectIPs` was sent but this client may not use it.",
             "content": {
               "application/json": {
                 "schema": {
@@ -96,7 +96,7 @@
             }
           },
           "429": {
-            "description": "Too many checks from this address.",
+            "description": "Too many checks from this address. Wait for `Retry-After` seconds before trying again.",
             "headers": {
               "Retry-After": {
                 "description": "Seconds to wait before trying again.",
@@ -114,7 +114,7 @@
             }
           },
           "502": {
-            "description": "The hostname lookup failed.",
+            "description": "The DNS lookup failed, for example because the resolver timed out. A hostname that does not exist is a 400.",
             "content": {
               "application/json": {
                 "schema": {
@@ -181,14 +181,14 @@
         "properties": {
           "host": {
             "type": "string",
-            "description": "Hostname or IP address. A hostname is sent as SNI.",
+            "description": "Hostname or IP address. A hostname is sent as SNI. A URL is accepted and reduced to its hostname (`https://www.example.edu/path` becomes `www.example.edu`); international names are converted to their ASCII form. Do not include a port; use `port`.",
             "example": "www.example.edu"
           },
           "port": {
             "type": "integer",
-            "minimum": 1,
+            "minimum": 0,
             "maximum": 65535,
-            "description": "TCP port. Defaults to 443, or to the protocol's usual port when `starttls` names one."
+            "description": "TCP port. Leave out (or send 0) for 443, or for the protocol's usual port when `starttls` names one."
           },
           "starttls": {
             "type": "string",
@@ -201,14 +201,14 @@
               "postgres",
               "none"
             ],
-            "description": "Leave out for automatic: on ports 21, 25, 587, 110, 143, 389 and 5432 the check tries TLS first, then STARTTLS for that port's protocol if the TLS handshake fails. A protocol name uses STARTTLS straight away on any port. `none` uses TLS only."
+            "description": "Leave out for automatic: on ports 21, 25, 110, 143, 389, 587 and 5432 the check tries TLS first, then STARTTLS for that port's protocol if the TLS handshake fails. A protocol name uses STARTTLS straight away on any port. `none` uses TLS only."
           },
           "connectIPs": {
             "type": "array",
             "items": {
               "type": "string"
             },
-            "description": "IP addresses to connect to instead of looking up the hostname. The hostname is still sent as SNI. This server may not allow it; see `GET /api/config`."
+            "description": "IP addresses to connect to instead of looking up the hostname, like `curl --resolve`. The hostname is still sent as SNI. This server may not allow it; `GET /api/config` says whether you can. Sending more addresses than this server allows is a 400."
           }
         }
       },
@@ -851,11 +851,13 @@
             "type": "boolean",
             "description": "Whether this client may send `connectIPs`."
           },
-          "maxIPsPerHost": {
-            "type": "integer"
-          },
           "trustStore": {
-            "$ref": "#/components/schemas/TrustStoreInfo"
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TrustStoreInfo"
+              }
+            ],
+            "description": "The root store data this server checks against."
           }
         }
       },
