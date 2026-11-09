@@ -11,3 +11,6 @@ bin/
 # Editor swap files
 *.swp
 *.swo
+
+# Local Helm values (site-specific image registry and hosts)
+deploy/helm/values.local.yaml

@@ -1,0 +1,49 @@
+# Test every push and merge request. On the default branch, build the image
+# and push it to this project's container registry as :latest and :<short SHA>.
+#
+# The build uses rootless Buildah, so the runner does not need privileged
+# mode or Docker-in-Docker.
+
+stages: [test, build]
+
+variables:
+  IMAGE: $CI_REGISTRY_IMAGE
+
+test:
+  stage: test
+  image: docker.io/library/golang:1.26
+  variables:
+    GOCACHE: $CI_PROJECT_DIR/.cache/go-build
+    GOMODCACHE: $CI_PROJECT_DIR/.cache/go-mod
+  cache:
+    key: go-$CI_COMMIT_REF_SLUG
+    paths: [.cache/]
+  script:
+    - go vet ./...
+    - go test ./...
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+build:
+  stage: build
+  image: quay.io/buildah/stable:v1.43.5
+  variables:
+    STORAGE_DRIVER: vfs
+    BUILDAH_FORMAT: docker
+    BUILDAH_ISOLATION: chroot
+  before_script:
+    - echo "$CI_REGISTRY_PASSWORD" | buildah login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+  script:
+    - >
+      buildah build
+      --file Containerfile
+      --label org.opencontainers.image.source=$CI_PROJECT_URL
+      --label org.opencontainers.image.revision=$CI_COMMIT_SHA
+      --tag "$IMAGE:$CI_COMMIT_SHORT_SHA"
+      --tag "$IMAGE:latest"
+      .
+    - buildah push "$IMAGE:$CI_COMMIT_SHORT_SHA"
+    - buildah push "$IMAGE:latest"
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
