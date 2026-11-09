@@ -122,6 +122,8 @@ All app settings are under `config.*`. The chart can also create:
 - a HorizontalPodAutoscaler and a PodDisruptionBudget
 - a NetworkPolicy that limits egress to DNS and the TLS ports you list
 
+For TLS on the Traefik `IngressRoute`, set `traefik.ingressRoute.tls.certResolver` (Traefik ACME), `tls.secretName` (an existing secret) or `tls.clusterIssuer` (cert-manager: the chart creates a `Certificate` for the host, stored in `<fullname>-tls`). `traefik.ingressRoute.annotations` adds annotations to the route.
+
 Site-specific values (image registry, hosts, pull secrets) can go in `deploy/helm/values.local.yaml`, which git ignores. Pass it with `-f deploy/helm/values.local.yaml`.
 
 ## CI (GitLab)

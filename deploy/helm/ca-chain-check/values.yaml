@@ -34,9 +34,14 @@ traefik:
     enabled: false
     entryPoints: [websecure]
     host: chain-check.example.com
+    annotations: {}
     tls:
       enabled: true
+      # Traefik ACME resolver name, or leave empty and use one of the options below.
       certResolver: ""
+      # cert-manager ClusterIssuer (e.g. letsencrypt-prod): creates a Certificate for
+      # `host` and serves it from secretName (default <fullname>-tls).
+      clusterIssuer: ""
       secretName: ""
   # Edge rate limit (second layer; the app also limits per client IP).
   middleware:

@@ -17,11 +17,33 @@ spec:
 ---
 {{- end }}
 {{- if $t.ingressRoute.enabled }}
+{{- $tls := $t.ingressRoute.tls }}
+{{- $issuer := $tls.clusterIssuer | default "" }}
+{{- $secret := $tls.secretName | default (ternary (printf "%s-tls" (include "ccc.fullname" .)) "" (ne $issuer "")) }}
+{{- if and $tls.enabled $issuer }}
+# cert-manager does not watch IngressRoutes, so request the certificate directly.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "ccc.fullname" . }}
+  labels: {{- include "ccc.labels" . | nindent 4 }}
+spec:
+  secretName: {{ $secret }}
+  dnsNames:
+    - {{ $t.ingressRoute.host | quote }}
+  issuerRef:
+    kind: ClusterIssuer
+    name: {{ $issuer }}
+---
+{{- end }}
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:
   name: {{ include "ccc.fullname" . }}
   labels: {{- include "ccc.labels" . | nindent 4 }}
+  {{- with $t.ingressRoute.annotations }}
+  annotations: {{- toYaml . | nindent 4 }}
+  {{- end }}
 spec:
   entryPoints: {{- toYaml $t.ingressRoute.entryPoints | nindent 4 }}
   routes:
@@ -34,12 +56,12 @@ spec:
       services:
         - name: {{ include "ccc.fullname" . }}
           port: {{ .Values.service.port }}
-  {{- if $t.ingressRoute.tls.enabled }}
+  {{- if $tls.enabled }}
   tls:
-    {{- with $t.ingressRoute.tls.certResolver }}
+    {{- with $tls.certResolver }}
     certResolver: {{ . }}
     {{- end }}
-    {{- with $t.ingressRoute.tls.secretName }}
+    {{- with $secret }}
     secretName: {{ . }}
     {{- end }}
   {{- end }}
