@@ -149,6 +149,9 @@ svg.i { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor;
 .brand { display: flex; flex-direction: column; padding-top: 22px; }
 .brand-name { font-size: var(--fs-lg); font-weight: 700; letter-spacing: -0.01em; }
 .brand-sub { font-size: var(--fs-sm); color: var(--bar-muted); }
+.bar-links { display: flex; flex-wrap: wrap; gap: var(--s1) var(--s4); margin-top: var(--s3); font-size: var(--fs-sm); font-weight: 600; }
+.bar-links a { color: var(--bar-ink); text-decoration: underline; text-decoration-color: var(--bar-edge); text-decoration-thickness: 2px; text-underline-offset: 4px; }
+.bar-links a:hover { text-decoration-thickness: 3px; }
 .probe-row { display: flex; gap: var(--s3); align-items: flex-end; }
 .field { display: flex; flex-direction: column; gap: var(--s1); min-width: 0; }
 .field > span { font-size: var(--fs-xs); font-weight: 600; color: var(--bar-muted); }
@@ -422,12 +425,14 @@ table.params { width: 100%; max-width: 42rem; border-collapse: collapse; font-si
 @media (pointer: coarse) {
   .btn-quiet { min-height: 44px; padding: 0 var(--s4); }
   .advanced summary { padding: 12px 0; }
+  .bar-links a { padding: 10px 0; }
 }
 
 /* ---------- Narrow screens ---------- */
 @media (max-width: 860px) {
   .bar-inner { grid-template-columns: 1fr; gap: var(--s3); }
   .brand { padding-top: 0; flex-direction: row; gap: var(--s3); align-items: baseline; flex-wrap: wrap; }
+  .bar-links { flex-basis: 100%; margin-top: 0; }
   .cert-head { display: none; }
   details.cert > summary { grid-template-columns: 2.5rem 1fr 1.25rem; grid-template-areas: "pos subj chev" ". iss ." ". exp ." ". flags ."; row-gap: 2px; }
   .c-pos { grid-area: pos; } .c-subj { grid-area: subj; } .c-iss { grid-area: iss; } .c-exp { grid-area: exp; } .c-flags { grid-area: flags; } .chev { grid-area: chev; }
