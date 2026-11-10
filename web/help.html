@@ -65,7 +65,7 @@
         <tbody>
           <tr><td><code>host</code></td><td>Yes</td><td>Hostname or IP address. The hostname is sent as SNI. A URL also works; only its hostname is used. Put the port in <code>port</code>, not after the hostname.</td></tr>
           <tr><td><code>port</code></td><td>No</td><td>TCP port. Defaults to 443, or to the protocol's usual port when <code>starttls</code> names one.</td></tr>
-          <tr><td><code>starttls</code></td><td>No</td><td><code>smtp</code>, <code>imap</code>, <code>pop3</code>, <code>ftp</code>, <code>ldap</code>, <code>postgres</code>, or <code>none</code>. See <a href="#starttls">STARTTLS</a>.</td></tr>
+          <tr><td><code>starttls</code></td><td>No</td><td><code>smtp</code>, <code>imap</code>, <code>pop3</code>, <code>ftp</code>, <code>ldap</code>, <code>postgres</code>, <code>mysql</code>, or <code>none</code>. See <a href="#starttls">STARTTLS</a>.</td></tr>
           <tr><td><code>connectIPs</code></td><td>No</td><td>List of IP addresses to connect to instead of looking up the hostname, like <code>curl --resolve</code>. The hostname is still sent as SNI. This server may turn this off; <code>GET /api/config</code> says whether you can use it. Sending more addresses than this server allows is an error.</td></tr>
         </tbody>
       </table>
@@ -74,10 +74,11 @@
       <h2 id="starttls">STARTTLS</h2>
       <p>Mail, directory and database servers often start in plain text and switch to TLS when asked. That switch is called STARTTLS.</p>
       <ul>
-        <li><strong>Automatic:</strong> on ports 21 (FTP), 25 and 587 (SMTP), 110 (POP3), 143 (IMAP), 389 (LDAP) and 5432 (PostgreSQL), the check tries TLS first. If the TLS handshake fails, it reconnects and tries STARTTLS for that protocol.</li>
+        <li><strong>Automatic:</strong> on ports 21 (FTP), 25 and 587 (SMTP), 110 (POP3), 143 (IMAP), 389 (LDAP) and 5432 (PostgreSQL), the check tries TLS first. If the TLS handshake fails, it reconnects and tries STARTTLS for that protocol. On port 3306 (MySQL and MariaDB) it uses STARTTLS straight away.</li>
         <li><strong>Named:</strong> <code>"starttls": "smtp"</code> uses STARTTLS straight away, on any port. Use this for servers on other ports, such as SMTP on 2525.</li>
         <li><strong>Off:</strong> <code>"starttls": "none"</code> uses TLS only, even on the ports above.</li>
       </ul>
+      <p>MySQL and MariaDB count each connection that ends before login as an error. A server that uses its host cache can refuse an address after <code>max_connect_errors</code> of them in a row (100 by default), until someone runs <code>FLUSH HOSTS</code>. Each check makes two such connections per IP, so don't run it against a MySQL server in a loop.</p>
       <p>When STARTTLS was used, the result for that IP has <code>tls.starttls</code> set to the protocol name.</p>
 
       <h3>RSA and ECDSA certificates</h3>

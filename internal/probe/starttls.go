@@ -2,6 +2,7 @@ package probe
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -20,6 +21,7 @@ var StartTLSPorts = map[string]int{
 	"ftp":      21,
 	"ldap":     389,
 	"postgres": 5432,
+	"mysql":    3306,
 }
 
 // AutoStartTLS maps the ports where servers normally expect STARTTLS rather
@@ -33,6 +35,15 @@ var AutoStartTLS = map[int]string{
 	389:  "ldap",
 	587:  "smtp",
 	5432: "postgres",
+}
+
+// DirectStartTLS maps ports whose servers never accept TLS from the first
+// byte, so the check goes straight to STARTTLS instead of trying TLS first.
+// MySQL counts each connection that fails before login as an error and
+// blocks the client's address after max_connect_errors of them, so a
+// pointless TLS attempt would bring that block closer.
+var DirectStartTLS = map[int]string{
+	3306: "mysql",
 }
 
 // StartTLSNames returns the supported protocol names, sorted.
@@ -136,6 +147,10 @@ func startTLS(conn net.Conn, proto string) error {
 		}
 		if b != 'S' {
 			return fmt.Errorf("PostgreSQL refused TLS (replied %q)", b)
+		}
+	case "mysql":
+		if err := mysqlStartTLS(conn, r); err != nil {
+			return fmt.Errorf("MySQL: %w", err)
 		}
 	case "ldap":
 		if err := ldapStartTLS(conn, r); err != nil {
@@ -319,4 +334,79 @@ func (s *sliceReader) ReadByte() (byte, error) {
 	c := s.b[0]
 	s.b = s.b[1:]
 	return c, nil
+}
+
+// MySQL and MariaDB capability flags used in the TLS upgrade.
+const (
+	mysqlLongPassword      = 0x00000001
+	mysqlProtocol41        = 0x00000200
+	mysqlSSL               = 0x00000800
+	mysqlSecureConnection  = 0x00008000
+	mysqlMaxGreeting       = 16 * 1024
+	mysqlCharsetUTF8MB4    = 45 // utf8mb4_general_ci
+	mysqlSSLRequestPayload = 32
+)
+
+// mysqlStartTLS reads the server's greeting and, if it offers TLS, sends an
+// SSLRequest packet. TLS starts straight after; the server sends no reply.
+// See the MySQL client/server protocol, "Protocol::HandshakeV10" and
+// "Protocol::SSLRequest".
+func mysqlStartTLS(conn net.Conn, r *bufio.Reader) error {
+	var hdr [4]byte
+	if _, err := io.ReadFull(r, hdr[:]); err != nil {
+		return fmt.Errorf("greeting: %w", err)
+	}
+	n := int(hdr[0]) | int(hdr[1])<<8 | int(hdr[2])<<16
+	if n == 0 || n > mysqlMaxGreeting {
+		return fmt.Errorf("greeting: unexpected packet length %d (is this a MySQL server?)", n)
+	}
+	body := make([]byte, n)
+	if _, err := io.ReadFull(r, body); err != nil {
+		return fmt.Errorf("greeting: %w", err)
+	}
+	switch body[0] {
+	case 10: // HandshakeV10
+	case 0xff:
+		return fmt.Errorf("server refused the connection: %s", mysqlErrText(body))
+	default:
+		return fmt.Errorf("greeting: unsupported protocol version %d (is this a MySQL server?)", body[0])
+	}
+	// protocol version, server version (NUL-terminated), connection ID (4),
+	// auth data part 1 (8), filler (1), then the low 2 bytes of the
+	// capability flags.
+	end := bytes.IndexByte(body[1:], 0)
+	if end < 0 {
+		return errors.New("greeting: malformed server version")
+	}
+	off := 1 + end + 1 + 4 + 8 + 1
+	if len(body) < off+2 {
+		return errors.New("greeting: too short")
+	}
+	caps := uint32(binary.LittleEndian.Uint16(body[off:]))
+	if caps&mysqlSSL == 0 {
+		return errors.New("server does not support TLS")
+	}
+	pkt := make([]byte, 4+mysqlSSLRequestPayload)
+	pkt[0] = mysqlSSLRequestPayload // length (3 bytes, little-endian)
+	pkt[3] = hdr[3] + 1             // sequence ID follows the greeting's
+	binary.LittleEndian.PutUint32(pkt[4:], mysqlLongPassword|mysqlProtocol41|mysqlSSL|mysqlSecureConnection)
+	binary.LittleEndian.PutUint32(pkt[8:], 1<<24) // max packet size
+	pkt[12] = mysqlCharsetUTF8MB4
+	// 23 bytes of zero filler follow.
+	_, err := conn.Write(pkt)
+	return err
+}
+
+// mysqlErrText returns the message of a MySQL ERR packet
+// (0xff, code (2), optional "#" and 5-character SQL state, message).
+func mysqlErrText(body []byte) string {
+	if len(body) < 3 {
+		return "error packet"
+	}
+	code := binary.LittleEndian.Uint16(body[1:])
+	msg := body[3:]
+	if len(msg) >= 6 && msg[0] == '#' {
+		msg = msg[6:]
+	}
+	return fmt.Sprintf("%s (error %d)", clip(string(msg)), code)
 }

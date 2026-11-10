@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"crypto/tls"
+	"encoding/binary"
 	"io"
 	"net"
 	"net/netip"
@@ -96,6 +97,16 @@ func serveOne(c net.Conn, proto string, accept bool, cert tls.Certificate) {
 		} else {
 			c.Write([]byte{'N'})
 		}
+	case "mysql":
+		c.Write(mysqlGreeting(ok))
+		if !ok {
+			return
+		}
+		req := make([]byte, 36)
+		if _, err := io.ReadFull(r, req); err != nil || req[0] != 32 || req[3] != 1 ||
+			binary.LittleEndian.Uint32(req[4:])&mysqlSSL == 0 {
+			return
+		}
 	case "ldap":
 		buf := make([]byte, len(ldapStartTLSRequest))
 		io.ReadFull(r, buf)
@@ -175,7 +186,7 @@ func TestStartTLSPlan(t *testing.T) {
 		wantFallback string
 	}{
 		{587, "", "", "smtp"}, {143, "", "", "imap"}, {443, "", "", ""}, {0, "", "", ""},
-		{25, "none", "", ""}, {465, "", "", ""}, {993, "", "", ""}, {2525, "smtp", "smtp", ""},
+		{25, "none", "", ""}, {3306, "", "mysql", ""}, {3306, "none", "", ""}, {465, "", "", ""}, {993, "", "", ""}, {2525, "smtp", "smtp", ""},
 	} {
 		req := &Request{Host: "127.0.0.1", Port: c.port, StartTLS: c.starttls}
 		if _, _, _, err := p.Plan(t.Context(), mustAddr("127.0.0.1"), req); err != nil {
@@ -220,4 +231,45 @@ func TestHandshakeFallsBackToStartTLS(t *testing.T) {
 	if _, _, err := p.handshake(t.Context(), "mail.example.test", 25, "", "smtp", mustAddr("127.0.0.1")); err == nil || !strings.Contains(err.Error(), "STARTTLS (smtp) also failed") {
 		t.Errorf("both failing: err = %v", err)
 	}
+}
+
+// mysqlGreeting builds a HandshakeV10 packet; withTLS sets CLIENT_SSL.
+func mysqlGreeting(withTLS bool) []byte {
+	caps := uint16(0xf7ff &^ mysqlSSL)
+	if withTLS {
+		caps |= mysqlSSL
+	}
+	body := []byte{10}
+	body = append(body, "8.4.3\x00"...)
+	body = append(body, 1, 0, 0, 0)    // connection ID
+	body = append(body, "abcdefgh"...) // auth data part 1
+	body = append(body, 0, byte(caps), byte(caps>>8), 45, 2, 0, 0xff, 0xc1, 21)
+	body = append(body, make([]byte, 10)...) // reserved
+	body = append(body, "ijklmnopqrst\x00mysql_native_password\x00"...)
+	return append([]byte{byte(len(body)), 0, 0, 0}, body...)
+}
+
+func TestMySQLErrors(t *testing.T) {
+	for _, c := range []struct {
+		name, send, want string
+	}{
+		{"err packet", mysqlPacket("\xff\x6a\x04Host '203.0.113.9' is not allowed to connect to this MySQL server"), "not allowed to connect to this MySQL server (error 1130)"},
+		{"not mysql", "HTTP/1.1 400 Bad Request\r\n\r\n", "is this a MySQL server?"},
+		{"no tls", string(mysqlGreeting(false)), "server does not support TLS"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			srv, cli := net.Pipe()
+			go func() { io.WriteString(srv, c.send); io.Copy(io.Discard, srv) }()
+			defer cli.Close()
+			_ = cli.SetDeadline(time.Now().Add(2 * time.Second))
+			err := startTLS(cli, "mysql")
+			if err == nil || !strings.Contains(err.Error(), c.want) {
+				t.Errorf("err = %v, want it to contain %q", err, c.want)
+			}
+		})
+	}
+}
+
+func mysqlPacket(body string) string {
+	return string([]byte{byte(len(body)), byte(len(body) >> 8), 0, 0}) + body
 }

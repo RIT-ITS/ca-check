@@ -251,9 +251,10 @@
               "ftp",
               "ldap",
               "postgres",
+              "mysql",
               "none"
             ],
-            "description": "Leave out for automatic: on ports 21, 25, 110, 143, 389, 587 and 5432 the check tries TLS first, then STARTTLS for that port's protocol if the TLS handshake fails. A protocol name uses STARTTLS straight away on any port. `none` uses TLS only."
+            "description": "Leave out for automatic: on ports 21, 25, 110, 143, 389, 587 and 5432 the check tries TLS first, then STARTTLS for that port's protocol if the TLS handshake fails. On port 3306 it uses MySQL STARTTLS straight away. A protocol name uses STARTTLS straight away on any port. `none` uses TLS only."
           },
           "connectIPs": {
             "type": "array",

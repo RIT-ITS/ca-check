@@ -166,7 +166,7 @@ networkPolicy:
   enabled: false
   ingressNamespaceSelector:
     kubernetes.io/metadata.name: traefik
-  egressPorts: [443]   # target ports users may test; add 8443, or STARTTLS ports (21 25 110 143 389 587 5432), as needed
+  egressPorts: [443]   # target ports users may test; add 8443, or STARTTLS ports (21 25 110 143 389 587 3306 5432), as needed
   dnsPort: 53
 
 nodeSelector: {}

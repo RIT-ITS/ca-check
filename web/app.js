@@ -861,7 +861,7 @@
     return s;
   }
 
-  const PROTO_NAMES = { smtp: "SMTP", imap: "IMAP", pop3: "POP3", ftp: "FTP", ldap: "LDAP", postgres: "PostgreSQL" };
+  const PROTO_NAMES = { smtp: "SMTP", imap: "IMAP", pop3: "POP3", ftp: "FTP", ldap: "LDAP", postgres: "PostgreSQL", mysql: "MySQL" };
   const protoName = (p) => PROTO_NAMES[p] || p.toUpperCase();
 
   // ---------- history ----------

@@ -302,7 +302,11 @@ func (p *Prober) Plan(ctx context.Context, client netip.Addr, req *Request) (hos
 		if req.Port == 0 {
 			req.Port = 443
 		}
-		req.Fallback = AutoStartTLS[req.Port]
+		if proto, ok := DirectStartTLS[req.Port]; ok {
+			req.StartTLS = proto
+		} else {
+			req.Fallback = AutoStartTLS[req.Port]
+		}
 	default:
 		def, ok := StartTLSPorts[req.StartTLS]
 		if !ok {
