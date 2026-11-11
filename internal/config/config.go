@@ -28,6 +28,7 @@ const (
 	DefaultMozillaRootsURL   = "https://ccadb.my.salesforce-sites.com/mozilla/IncludedRootsPEMTxt?TrustBitsInclude=Websites"
 	DefaultCCADBStoresURL    = "https://ccadb.my.salesforce-sites.com/ccadb/AllIncludedRootCertsCSV"
 	DefaultMicrosoftRootsURL = "https://ccadb.my.salesforce-sites.com/microsoft/IncludedCACertificateReportForMSFTCSVPEM"
+	DefaultIntermediatesURL  = "https://ccadb.my.salesforce-sites.com/mozilla/PublicAllIntermediateCertsWithPEMCSV"
 )
 
 // PendingDistrust marks a CA (by SHA-256 fingerprint) as scheduled to lose trust.
@@ -71,6 +72,7 @@ type Config struct {
 	MozillaRootsURL   string
 	CCADBStoresURL    string
 	MicrosoftRootsURL string
+	IntermediatesURL  string // CCADB intermediate report, for cross-signs; empty: embedded only
 	// RequiredStores are the root programs that must all trust the chain
 	// for the trust check to pass.
 	RequiredStores    []string
@@ -191,6 +193,7 @@ func LoadFrom(get func(string) string) (*Config, error) {
 	c.MozillaRootsURL = str("MOZILLA_ROOTS_URL", DefaultMozillaRootsURL)
 	c.CCADBStoresURL = str("CCADB_STORES_URL", DefaultCCADBStoresURL)
 	c.MicrosoftRootsURL = str("MICROSOFT_ROOTS_URL", DefaultMicrosoftRootsURL)
+	c.IntermediatesURL = str("CCADB_INTERMEDIATES_URL", DefaultIntermediatesURL)
 	if c.RequiredStores, err = parseStores(str("REQUIRED_TRUST_STORES", "apple,chrome,microsoft,mozilla")); err != nil {
 		return nil, err
 	}

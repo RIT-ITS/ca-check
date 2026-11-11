@@ -40,7 +40,9 @@ func main() {
 
 	loader := &truststore.Loader{
 		MozillaURL: cfg.MozillaRootsURL, StoresURL: cfg.CCADBStoresURL, MicrosoftURL: cfg.MicrosoftRootsURL,
-		Fallback:     truststore.Sources{MozillaPEM: assets.MozillaRootsPEM, StoresCSV: assets.RootStoresCSV, MicrosoftCSV: assets.MicrosoftRootsCSV},
+		IntermediatesURL: cfg.IntermediatesURL,
+		Fallback: truststore.Sources{MozillaPEM: assets.MozillaRootsPEM, StoresCSV: assets.RootStoresCSV,
+			MicrosoftCSV: assets.MicrosoftRootsCSV, CrossSignsPEM: assets.CrossSignsPEM},
 		FallbackDate: snapshotDate(),
 	}
 	initErr := loader.Init(ctx)

@@ -15,6 +15,10 @@ var (
 	// MicrosoftRootsCSV: Microsoft's included CA report, with PEM.
 	//go:embed microsoft-roots.csv
 	MicrosoftRootsCSV []byte
+	// CrossSignsPEM: cross-signs of included roots, filtered from CCADB's
+	// intermediate report by cmd/cross-signs.
+	//go:embed cross-signs.pem
+	CrossSignsPEM []byte
 	// RootsDate: the UTC date (YYYY-MM-DD) the snapshots were downloaded.
 	//go:embed roots-date.txt
 	RootsDate string

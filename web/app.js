@@ -415,7 +415,7 @@
     const a = v.analysis;
     const t = v.tls || {};
     const byId = {};
-    for (const c of [...a.chain, ...(a.storeRoots || [])]) if (!byId[c.id]) byId[c.id] = c;
+    for (const c of [...a.chain, ...(a.storeRoots || []), ...(a.crossSigns || [])]) if (!byId[c.id]) byId[c.id] = c;
     const kt = KEY_NAME[v.keyType] || v.keyType;
     const onlyOne = !two && /^The server has only/.test(res.keyTypeNote || "");
 
@@ -611,6 +611,10 @@
       sec.append(h("h2", { class: "sec", style: "margin-top:24px" }, "Roots from the trust store", h("small", {}, "not sent by the server, used to complete a path")),
         h("div", { class: "certs" }, certHead(), a.storeRoots.map(certRow)));
     }
+    if (a.crossSigns && a.crossSigns.length) {
+      sec.append(h("h2", { class: "sec", style: "margin-top:24px" }, "Cross-signs not sent", h("small", {}, "published in CCADB, with the roots they lead to. Shown for information; they don't change the result.")),
+        h("div", { class: "certs" }, certHead(), a.crossSigns.map(certRow)));
+    }
     return sec;
   }
 
@@ -638,6 +642,7 @@
   function certRow(c) {
     const tags = [];
     const tag = (st, text) => tags.push(h("span", { class: `tag ${st}` }, st !== "neutral" ? icon(st === "neutral" ? "info" : st) : null, text));
+    if (c.source === "ccadb") tag("neutral", "Cross-sign, not sent");
     if (c.index === 0) tag("neutral", "Leaf");
     else if (c.isCA) tag("neutral", c.selfSigned ? "Root" : "Intermediate");
     if (c.inMozilla) tag("pass", "Trusted root");
@@ -714,11 +719,15 @@
         p.nodes.forEach((id, i) => {
           if (i) parts.push(h("span", { class: "arrow", "aria-hidden": "true" }, "→"), h("span", { class: "sr" }, " issued by "));
           const c = byId[id];
-          parts.push(c ? (c.index >= 0 ? `#${c.index} ${c.subjectCN}` : `${c.subjectCN} (trust store)`) : id);
+          parts.push(c ? (c.index >= 0 ? `#${c.index} ${c.subjectCN}` : c.source === "ccadb" ? `${c.subjectCN} (cross-sign, not sent)` : `${c.subjectCN} (trust store)`) : id);
         });
         if (p.terminal === "incomplete") parts.push(h("span", { class: "arrow", "aria-hidden": "true" }, "→"), h("span", { class: "sr" }, " issued by "), `missing: ${p.missingIssuer}`);
-        const [st, word] = TERM[p.terminal];
+        let [st, word] = TERM[p.terminal];
         const notes = [];
+        if (p.notSent) {
+          if (st === "pass") st = "info";
+          notes.push(h("span", { class: "tag neutral", title: "The server does not send this cross-sign. Clients that already have it, or fetch missing certificates, may build this path." }, "Not sent: cross-sign from CCADB"));
+        }
         if (p.best) notes.push(h("span", { class: "tag pass" }, "Best path"));
         if (p.stores && p.stores.length) {
           const names = [];
@@ -730,7 +739,7 @@
         return h("tr", {}, h("td", { class: "ends" }, flagWord(st, word)), h("td", { class: "route" }, parts), h("td", { class: "notes" }, h("span", { class: "c-flags" }, notes)));
       }))));
     const el = h("section", { "aria-labelledby": "paths-h" },
-      h("h2", { class: "sec", id: "paths-h" }, "Paths", h("small", {}, `${a.paths.length} found, including cross-signs. Roots are at the top, the leaf at the bottom.`)),
+      h("h2", { class: "sec", id: "paths-h" }, "Paths", h("small", {}, pathsSummary(a.paths))),
       fig, table);
     return {
       el,
@@ -783,6 +792,11 @@
     });
   }
 
+  function pathsSummary(paths) {
+    const extra = paths.filter((p) => p.notSent).length;
+    const sent = paths.length - extra;
+    return `${sent} found${extra ? `, plus ${extra} through cross-signs the server doesn't send` : ", including cross-signs"}. Roots are at the top, the leaf at the bottom.`;
+  }
   function flagWord(st, word) { return h("span", { class: `flag ${st}` }, icon(st), word); }
   // What each diagram style means. The server sends only the styles this
   // diagram uses, with their colours, so the key always matches the drawing.
@@ -796,6 +810,7 @@
     revoked: ["Revoked", "Its issuer says it is revoked (OCSP or CRL). Clients that check will reject it."],
     unrelated: ["Unrelated", "Not on any path from this site's certificate. Remove it."],
     missing: ["Missing issuer", "Not sent by the server and not in the trust store, so the path stops here. Its arrow is dashed."],
+    crosssign: ["Cross-sign, not sent", "Published in CCADB but not sent by the server, or a root reached only through one. Its arrows are dashed. Shown for information."],
     link: ["Issued", "Points from the issuer down to the certificate it signed."],
     "trusted-link": ["Trusted link", "On a path to a trusted root."],
   };

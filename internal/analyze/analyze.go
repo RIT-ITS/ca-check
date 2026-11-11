@@ -73,6 +73,10 @@ type Path struct {
 	TimeValid     bool     `json:"timeValid"`               // every cert in validity window
 	Pending       bool     `json:"pendingDistrust"`         // passes through a pending-distrust CA
 	Best          bool     `json:"best"`
+	// NotSent: the path uses a cross-sign from CCADB that the server did not
+	// send. Such paths are shown for information only: they don't count
+	// toward any check, and come after all other paths.
+	NotSent bool `json:"notSent,omitempty"`
 }
 
 // Check is one summary card.
@@ -88,6 +92,9 @@ type Check struct {
 type Result struct {
 	Chain      []CertInfo `json:"chain"`      // as presented, in order
 	StoreRoots []CertInfo `json:"storeRoots"` // Mozilla roots used but not sent
+	// CrossSigns are certificates the server did not send that appear only
+	// on NotSent paths: cross-signs from CCADB and the roots they lead to.
+	CrossSigns []CertInfo `json:"crossSigns,omitempty"`
 	Paths      []Path     `json:"paths"`
 	Checks     []Check    `json:"checks"`
 	Overall    string     `json:"overall"`
@@ -120,7 +127,9 @@ type analyzer struct {
 	ids      map[string]string
 	order    []string // presented unique fingerprints in order
 	store    []*CertInfo
-	paths    []Path
+	cross    []*CertInfo // cross-signs from the store's CCADB pool
+	paths    []Path      // paths using only sent certs and store roots
+	notSent  []Path      // paths through a cross-sign the server did not send
 	sigCache map[[2]string]bool
 }
 
@@ -160,7 +169,6 @@ func Analyze(presented []*x509.Certificate, o Options) *Result {
 
 	a.walk([]string{a.order[0]}, map[string]bool{a.order[0]: true})
 	a.scorePaths()
-	res.Paths = a.paths
 	a.markUsage(res)
 	a.checkRevocation()
 	res.TrustStores = a.storeResults()
@@ -173,6 +181,7 @@ func Analyze(presented []*x509.Certificate, o Options) *Result {
 		res.Overall = Pass
 	}
 	res.Mermaid, res.DiagramKey = a.mermaid(res)
+	res.Paths = append(append([]Path{}, a.paths...), a.notSent...)
 	return res
 }
 
@@ -213,6 +222,19 @@ func (a *analyzer) issuers(fp string) []string {
 		}
 		out = append(out, rfp)
 	}
+	for _, x := range a.o.Store.CandidateCrossSigns(child) {
+		xfp := truststore.FingerprintSHA256(x)
+		if xfp == fp || contains(out, xfp) || a.o.Now.After(x.NotAfter) || a.o.Now.Before(x.NotBefore) || !a.verifies(child, x) {
+			continue
+		}
+		if _, known := a.nodes[xfp]; !known {
+			ci := describe(x, fmt.Sprintf("x%d", len(a.cross)), -1, "ccadb", a.o)
+			a.cross = append(a.cross, &ci)
+			a.nodes[xfp] = &node{cert: x, info: &ci}
+			a.ids[xfp] = ci.ID
+		}
+		out = append(out, xfp)
+	}
 	return out
 }
 
@@ -226,13 +248,22 @@ func contains(s []string, v string) bool {
 }
 
 func (a *analyzer) emit(p Path) {
-	if len(a.paths) < maxPaths {
+	for _, id := range p.Nodes {
+		if ci := a.info(id); ci != nil && ci.Source == "ccadb" {
+			p.NotSent = true
+			break
+		}
+	}
+	switch {
+	case p.NotSent && len(a.notSent) < maxPaths:
+		a.notSent = append(a.notSent, p)
+	case !p.NotSent && len(a.paths) < maxPaths:
 		a.paths = append(a.paths, p)
 	}
 }
 
 func (a *analyzer) walk(chain []string, seen map[string]bool) {
-	if len(a.paths) >= maxPaths {
+	if len(a.paths) >= maxPaths && len(a.notSent) >= maxPaths {
 		return
 	}
 	fp := chain[len(chain)-1]
@@ -283,8 +314,15 @@ func (a *analyzer) info(id string) *CertInfo {
 func timeOK(s string) bool { return s == StatusValid || s == StatusExpiringSoon }
 
 func (a *analyzer) scorePaths() {
-	for i := range a.paths {
-		p := &a.paths[i]
+	a.fillPaths(a.paths)
+	a.fillPaths(a.notSent)
+	a.pickBest()
+}
+
+// fillPaths works out each path's trust, stores, validity and distrust.
+func (a *analyzer) fillPaths(paths []Path) {
+	for i := range paths {
+		p := &paths[i]
 		p.Trusted = p.Terminal == TermMozillaRoot
 		if end := a.info(p.Nodes[len(p.Nodes)-1]); p.Terminal != TermIncomplete && end != nil {
 			for st, lvl := range end.Stores {
@@ -308,6 +346,11 @@ func (a *analyzer) scorePaths() {
 			}
 		}
 	}
+}
+
+// pickBest marks the best sent path and sorts the sent paths best first.
+// Not-sent paths keep their own order.
+func (a *analyzer) pickBest() {
 	// Best path: trusted, time-valid, not pending, shortest; stable by discovery.
 	required := a.required()
 	score := func(p Path) int {
@@ -412,15 +455,34 @@ func (a *analyzer) markUsage(res *Result) {
 	for _, s := range a.store {
 		s.OnTrustedPath = onTrusted[s.ID]
 	}
+	// Roots reached only through a cross-sign the server didn't send are
+	// listed with the cross-signs, so storeRoots keeps meaning "roots the
+	// served chain uses".
+	onNotSent := map[string]bool{}
+	for _, p := range a.notSent {
+		for _, id := range p.Nodes {
+			onNotSent[id] = true
+		}
+	}
+	for _, x := range a.cross {
+		res.CrossSigns = append(res.CrossSigns, *x)
+	}
 	res.StoreRoots = res.StoreRoots[:0]
 	for _, s := range a.store {
-		res.StoreRoots = append(res.StoreRoots, *s)
+		if onNotSent[s.ID] && !onAny[s.ID] {
+			res.CrossSigns = append(res.CrossSigns, *s)
+		} else {
+			res.StoreRoots = append(res.StoreRoots, *s)
+		}
 	}
 }
 
 func label(ci CertInfo) string {
 	if ci.Index >= 0 {
 		return fmt.Sprintf("#%d %s", ci.Index, ci.SubjectCN)
+	}
+	if ci.Source == "ccadb" {
+		return ci.SubjectCN + " (cross-sign, not sent)"
 	}
 	return ci.SubjectCN + " (trust store)"
 }
@@ -842,10 +904,12 @@ var diagramStyles = []struct {
 	{KeyEntry{ID: "revoked", Kind: "node", Fill: "#fbeceb", Stroke: "#b3261e", Text: "#16202b", Width: 1.5, Hatch: true}, "bad"},
 	{KeyEntry{ID: "invalid", Kind: "node", Fill: "#fbeceb", Stroke: "#b3261e", Text: "#16202b", Width: 1.5, Hatch: true}, "bad"},
 	{KeyEntry{ID: "unrelated", Kind: "node", Fill: "#fbeceb", Stroke: "#b3261e", Text: "#16202b", Width: 1.5, Hatch: true}, "bad"},
+	{KeyEntry{ID: "crosssign", Kind: "node", Fill: "#f3f5f7", Stroke: "#7d8a99", Text: "#16202b", Width: 1.5, Dash: "6 4"}, "xsign"},
 	{KeyEntry{ID: "missing", Kind: "node", Fill: "transparent", Stroke: "#b3261e", Text: "#b3261e", Width: 1.5, Dash: "6 4"}, "missing"},
 	{KeyEntry{ID: "link", Kind: "link", Stroke: "#7d8a99", Width: 1.5}, ""},
 	{KeyEntry{ID: "trusted-link", Kind: "link", Stroke: "#2c6a3d", Width: 3}, ""},
 	{KeyEntry{ID: "missing-link", Kind: "link", Stroke: "#7d8a99", Width: 1.5, Dash: "3 3"}, ""},
+	{KeyEntry{ID: "crosssign-link", Kind: "link", Stroke: "#7d8a99", Width: 1.5, Dash: "3 3"}, ""},
 }
 
 func (a *analyzer) mermaid(res *Result) (string, []KeyEntry) {
@@ -859,6 +923,11 @@ func (a *analyzer) mermaid(res *Result) (string, []KeyEntry) {
 	b.WriteString("flowchart TD\n")
 	all := append([]CertInfo{}, res.Chain...)
 	all = append(all, res.StoreRoots...)
+	all = append(all, res.CrossSigns...)
+	notSentOnly := map[string]bool{}
+	for _, ci := range res.CrossSigns {
+		notSentOnly[ci.ID] = true
+	}
 	declared := map[string]bool{}
 	var declaredIDs []string
 	for _, ci := range all {
@@ -868,7 +937,10 @@ func (a *analyzer) mermaid(res *Result) (string, []KeyEntry) {
 		declared[ci.ID] = true
 		declaredIDs = append(declaredIDs, ci.ID)
 		where := fmt.Sprintf("sent #%d", ci.Index)
-		if ci.Index < 0 {
+		switch {
+		case ci.Source == "ccadb":
+			where = "cross-sign (not sent)"
+		case ci.Index < 0:
 			where = "trust store (not sent)"
 		}
 		extra := ""
@@ -892,6 +964,8 @@ func (a *analyzer) mermaid(res *Result) (string, []KeyEntry) {
 		}
 		key := "other"
 		switch {
+		case notSentOnly[ci.ID]:
+			key = "crosssign"
 		case ci.Revocation.Revoked() != nil:
 			key = "revoked"
 		case ci.Status == StatusExpired || ci.Status == StatusNotYetValid:
@@ -930,7 +1004,7 @@ func (a *analyzer) mermaid(res *Result) (string, []KeyEntry) {
 	var order []edge
 	trustedEdge := map[edge]bool{}
 	missing := 0
-	for _, p := range a.paths {
+	for _, p := range append(append([]Path{}, a.paths...), a.notSent...) {
 		for i := 0; i+1 < len(p.Nodes); i++ {
 			e := edge{p.Nodes[i], p.Nodes[i+1]}
 			if _, ok := edges[e]; !ok {
@@ -960,6 +1034,12 @@ func (a *analyzer) mermaid(res *Result) (string, []KeyEntry) {
 		fpOf[id] = fp
 	}
 	for _, child := range declaredIDs {
+		// A self-signed root needs no issuer. Its cross-signs carry the same
+		// name and key, so its signature also verifies against them, but
+		// drawing that as "issued" would be wrong.
+		if a.nodes[fpOf[child]].info.SelfSigned {
+			continue
+		}
 		for _, parent := range declaredIDs {
 			e := edge{child, parent}
 			if _, done := edges[e]; done || child == parent {
@@ -977,6 +1057,9 @@ func (a *analyzer) mermaid(res *Result) (string, []KeyEntry) {
 		case strings.HasPrefix(e.to, "m"):
 			arrow = "-.->"
 			used["missing-link"] = true
+		case notSentOnly[e.to] || notSentOnly[e.from]:
+			arrow = "-.->"
+			used["crosssign-link"] = true
 		case trustedEdge[e]:
 			used["trusted-link"] = true
 		default:

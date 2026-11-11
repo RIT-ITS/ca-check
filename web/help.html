@@ -124,7 +124,7 @@
           <tr><td><code>results[].analysis.checks[]</code></td><td>One entry per test, with <code>id</code>, <code>status</code>, <code>detail</code> and sometimes <code>items</code> (the certificates involved).</td></tr>
           <tr><td><code>results[].analysis.chain[]</code></td><td>The certificates in the order the server sent them, with subject, issuer, dates, fingerprints and PEM.</td></tr>
           <tr><td><code>results[].analysis.storeRoots[]</code></td><td>Roots from the trust store that complete a path but were not sent.</td></tr>
-          <tr><td><code>results[].analysis.paths[]</code></td><td>Every path from the leaf to a root, listed by certificate <code>id</code>. <code>terminal</code> is <code>mozilla_root</code> (a root at least one store trusts), <code>untrusted_root</code> or <code>incomplete</code>.</td></tr>
+          <tr><td><code>results[].analysis.paths[]</code></td><td>Every path from the leaf to a root, listed by certificate <code>id</code>. <code>terminal</code> is <code>mozilla_root</code> (a root at least one store trusts), <code>untrusted_root</code> or <code>incomplete</code>. A path with <code>notSent: true</code> goes through a cross-sign of an included root that the server doesn't send (from CCADB, listed in <code>crossSigns</code>). It is for information only and never affects the result.</td></tr>
           <tr><td><code>consistency</code></td><td>Whether all tested IPs sent the same chain.</td></tr>
         </tbody>
       </table>

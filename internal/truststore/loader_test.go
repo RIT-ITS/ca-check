@@ -2,8 +2,11 @@ package truststore
 
 import (
 	"context"
+	"encoding/pem"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -100,5 +103,54 @@ func TestLoaderEmptyWithoutData(t *testing.T) {
 	}
 	if err := l.Refresh(context.Background()); err == nil {
 		t.Fatal("refresh should keep failing")
+	}
+}
+
+// Cross-signs come from the embedded copy until the intermediate report
+// downloads; a failed download of that report keeps them and does not fail
+// the refresh.
+func TestLoaderCrossSigns(t *testing.T) {
+	src := embedded()
+	src.CrossSignsPEM = assets.CrossSignsPEM
+	var interOK atomic.Bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/mozilla":
+			w.Write(src.MozillaPEM)
+		case "/stores":
+			w.Write(src.StoresCSV)
+		case "/microsoft":
+			w.Write(src.MicrosoftCSV)
+		case "/intermediates":
+			if !interOK.Load() {
+				http.Error(w, "down", http.StatusServiceUnavailable)
+				return
+			}
+			// One cross-sign from the embedded copy, as the CSV report
+			// quotes it.
+			c := ParsePEMBundle(src.CrossSignsPEM)[0]
+			p := strings.TrimSpace(string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: c.Raw})))
+			fmt.Fprintf(w, "\"Certificate Name\",\"PEM Info\"\n\"x\",\"'%s'\"\n", p)
+		}
+	}))
+	defer srv.Close()
+	l := loader(srv.URL, src)
+	l.IntermediatesURL = srv.URL + "/intermediates"
+	want := len(ParsePEMBundle(src.CrossSignsPEM))
+	if want < 50 {
+		t.Fatalf("embedded cross-signs: %d", want)
+	}
+	if err := l.Init(context.Background()); err != nil {
+		t.Fatalf("a failed intermediate download must not fail the refresh: %v", err)
+	}
+	if info := l.Store.Info(); info.Source != "CCADB" || info.CrossSigns != want {
+		t.Fatalf("after failed intermediate download: source %s, %d cross-signs, want %d", info.Source, info.CrossSigns, want)
+	}
+	interOK.Store(true)
+	if err := l.Refresh(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if n := l.Store.Info().CrossSigns; n != 1 {
+		t.Errorf("after download: %d cross-signs, want 1", n)
 	}
 }

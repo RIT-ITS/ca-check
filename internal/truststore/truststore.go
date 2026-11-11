@@ -48,8 +48,16 @@ type Store struct {
 	bySubject map[string][]*x509.Certificate
 	bySKI     map[string][]*x509.Certificate
 	trust     map[string]map[string]string // fingerprint -> program -> level
-	source    string
-	loadedAt  time.Time
+	// Cross-signs: certificates (from CCADB's intermediate report) that
+	// give an included root's name and key a second issuer. crossAll is
+	// the last downloaded candidate list; cross is the part of it that
+	// matches the current roots.
+	crossAll       []*x509.Certificate
+	cross          []*x509.Certificate
+	crossBySubject map[string][]*x509.Certificate
+	crossBySKI     map[string][]*x509.Certificate
+	source         string
+	loadedAt       time.Time
 	// Download status, set by the Loader.
 	refreshFailing bool
 	nextAttempt    time.Time
@@ -61,6 +69,8 @@ type Info struct {
 	Count    int            `json:"count"`
 	LoadedAt time.Time      `json:"loadedAt"`         // when the data was downloaded from CCADB
 	Stores   map[string]int `json:"stores,omitempty"` // roots each program trusts fully
+	// CrossSigns is how many cross-signs of included roots are known.
+	CrossSigns int `json:"crossSigns,omitempty"`
 	// RefreshFailing is set when the last download from CCADB failed;
 	// NextAttempt is when the server tries again.
 	RefreshFailing bool       `json:"refreshFailing,omitempty"`
@@ -149,7 +159,51 @@ func (s *Store) set(certs []*x509.Certificate, trust map[string]map[string]strin
 	s.mu.Lock()
 	s.byFP, s.bySubject, s.bySKI, s.trust = byFP, bySubj, bySKI, kept
 	s.source, s.loadedAt = source, loadedAt
+	s.indexCrossLocked()
 	s.mu.Unlock()
+}
+
+// SetCrossSigns replaces the cross-sign candidates. Only certificates that
+// are not self-signed and carry the same subject and public key as an
+// included root are kept, so a cross-sign can only stand in where that root
+// already could: it never fills in an intermediate the server left out.
+func (s *Store) SetCrossSigns(certs []*x509.Certificate) {
+	s.mu.Lock()
+	s.crossAll = certs
+	s.indexCrossLocked()
+	s.mu.Unlock()
+}
+
+func (s *Store) indexCrossLocked() {
+	type key struct{ subj, spki string }
+	roots := map[key]bool{}
+	for _, r := range s.byFP {
+		roots[key{string(r.RawSubject), string(r.RawSubjectPublicKeyInfo)}] = true
+	}
+	seen := map[string]bool{}
+	s.cross = nil
+	s.crossBySubject = map[string][]*x509.Certificate{}
+	s.crossBySKI = map[string][]*x509.Certificate{}
+	for _, c := range s.crossAll {
+		fp := FingerprintSHA256(c)
+		if seen[fp] || s.byFP[fp] != nil || bytes.Equal(c.RawIssuer, c.RawSubject) ||
+			!roots[key{string(c.RawSubject), string(c.RawSubjectPublicKeyInfo)}] {
+			continue
+		}
+		seen[fp] = true
+		s.cross = append(s.cross, c)
+		s.crossBySubject[string(c.RawSubject)] = append(s.crossBySubject[string(c.RawSubject)], c)
+		if len(c.SubjectKeyId) > 0 {
+			s.crossBySKI[string(c.SubjectKeyId)] = append(s.crossBySKI[string(c.SubjectKeyId)], c)
+		}
+	}
+}
+
+// CrossSigns returns the cross-signs that match the current roots.
+func (s *Store) CrossSigns() []*x509.Certificate {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return append([]*x509.Certificate(nil), s.cross...)
 }
 
 // Contains reports whether any program includes the root.
@@ -181,6 +235,18 @@ func (s *Store) Trust(fp string) map[string]string {
 func (s *Store) CandidateIssuers(c *x509.Certificate) []*x509.Certificate {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	return candidates(c, s.bySKI, s.bySubject)
+}
+
+// CandidateCrossSigns returns cross-signs that may have issued c (by AKI or
+// subject). Callers must still verify the signature.
+func (s *Store) CandidateCrossSigns(c *x509.Certificate) []*x509.Certificate {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return candidates(c, s.crossBySKI, s.crossBySubject)
+}
+
+func candidates(c *x509.Certificate, bySKI, bySubject map[string][]*x509.Certificate) []*x509.Certificate {
 	seen := map[*x509.Certificate]bool{}
 	var out []*x509.Certificate
 	add := func(list []*x509.Certificate) {
@@ -192,9 +258,9 @@ func (s *Store) CandidateIssuers(c *x509.Certificate) []*x509.Certificate {
 		}
 	}
 	if len(c.AuthorityKeyId) > 0 {
-		add(s.bySKI[string(c.AuthorityKeyId)])
+		add(bySKI[string(c.AuthorityKeyId)])
 	}
-	add(s.bySubject[string(c.RawIssuer)])
+	add(bySubject[string(c.RawIssuer)])
 	return out
 }
 
@@ -210,7 +276,7 @@ func (s *Store) Info() Info {
 			}
 		}
 	}
-	info := Info{Source: s.source, Count: len(s.byFP), LoadedAt: s.loadedAt, Stores: counts, RefreshFailing: s.refreshFailing}
+	info := Info{Source: s.source, Count: len(s.byFP), LoadedAt: s.loadedAt, Stores: counts, CrossSigns: len(s.cross), RefreshFailing: s.refreshFailing}
 	if s.refreshFailing && !s.nextAttempt.IsZero() {
 		next := s.nextAttempt
 		info.NextAttempt = &next
@@ -223,6 +289,9 @@ type Sources struct {
 	MozillaPEM   []byte // Mozilla included roots, Websites trust bit (PEM)
 	StoresCSV    []byte // AllIncludedRootCertsCSV: status per program
 	MicrosoftCSV []byte // Microsoft included CA report with PEM
+	// CrossSignsPEM: cross-signs of included roots (PEM). Optional; the
+	// live equivalent is the intermediate report at Loader.IntermediatesURL.
+	CrossSignsPEM []byte
 }
 
 // Build parses the CCADB reports into roots and per-program trust.
@@ -339,6 +408,16 @@ func parseStatus(data []byte) (map[string]map[string]string, error) {
 	return out, nil
 }
 
+// ParseIntermediatesCSV reads the certificates from CCADB's intermediate
+// certificate report (PublicAllIntermediateCertsWithPEMCSV).
+func ParseIntermediatesCSV(data []byte) ([]*x509.Certificate, error) {
+	certs, err := parseMicrosoftPEM(data)
+	if err == nil && len(certs) == 0 {
+		err = fmt.Errorf("no certificates")
+	}
+	return certs, err
+}
+
 func parseMicrosoftPEM(data []byte) ([]*x509.Certificate, error) {
 	rows, err := readCSV(data)
 	if err != nil {
@@ -349,7 +428,8 @@ func parseMicrosoftPEM(data []byte) ([]*x509.Certificate, error) {
 	}
 	var buf bytes.Buffer
 	for _, r := range rows {
-		buf.WriteString(r["PEM Info"])
+		// The intermediate report wraps each PEM in single quotes.
+		buf.WriteString(strings.Trim(r["PEM Info"], "'"))
 		buf.WriteByte('\n')
 	}
 	return ParsePEMBundle(buf.Bytes()), nil
@@ -362,9 +442,12 @@ type Loader struct {
 	MozillaURL   string
 	StoresURL    string
 	MicrosoftURL string
-	Fallback     Sources
-	FallbackDate time.Time // when the embedded reports were downloaded
-	Client       *http.Client
+	// IntermediatesURL is CCADB's intermediate report, the source of
+	// cross-signs. Empty keeps the embedded cross-signs.
+	IntermediatesURL string
+	Fallback         Sources
+	FallbackDate     time.Time // when the embedded reports were downloaded
+	Client           *http.Client
 	// Retry back-off after a failed download; zero means the defaults.
 	RetryMin, RetryMax time.Duration
 }
@@ -384,6 +467,7 @@ func (l *Loader) Init(ctx context.Context) error {
 	}
 	if certs, trust, err := Build(l.Fallback); err == nil {
 		l.Store.set(certs, trust, "embedded snapshot", l.FallbackDate)
+		l.Store.SetCrossSigns(ParsePEMBundle(l.Fallback.CrossSignsPEM))
 	} else {
 		slog.Error("embedded trust store snapshot is unusable", "err", err)
 	}
@@ -412,9 +496,28 @@ func (l *Loader) Refresh(ctx context.Context) error {
 		return err
 	}
 	l.Store.set(certs, trust, "CCADB", time.Now())
+	l.refreshCrossSigns(ctx)
 	info := l.Store.Info()
-	slog.Info("trust store refreshed", "roots", info.Count, "stores", info.Stores)
+	slog.Info("trust store refreshed", "roots", info.Count, "stores", info.Stores, "crossSigns", info.CrossSigns)
 	return nil
+}
+
+// refreshCrossSigns downloads the intermediate report. Cross-signs are extra
+// information, so a failure only logs and keeps the current ones.
+func (l *Loader) refreshCrossSigns(ctx context.Context) {
+	if l.IntermediatesURL == "" {
+		return
+	}
+	data, err := l.fetch(ctx, l.IntermediatesURL)
+	var certs []*x509.Certificate
+	if err == nil {
+		certs, err = ParseIntermediatesCSV(data)
+	}
+	if err != nil {
+		slog.Warn("cross-sign refresh failed; keeping current cross-signs", "url", l.IntermediatesURL, "err", err)
+		return
+	}
+	l.Store.SetCrossSigns(certs)
 }
 
 // RetryDelay is the wait before retry number n (1 for the first retry).

@@ -31,6 +31,7 @@ data:
   MOZILLA_ROOTS_URL: {{ $c.mozillaRootsURL | quote }}
   CCADB_STORES_URL: {{ $c.ccadbStoresURL | quote }}
   MICROSOFT_ROOTS_URL: {{ $c.microsoftRootsURL | quote }}
+  CCADB_INTERMEDIATES_URL: {{ $c.ccadbIntermediatesURL | quote }}
   REQUIRED_TRUST_STORES: {{ $c.requiredTrustStores | quote }}
   TRUSTSTORE_REFRESH: {{ $c.truststoreRefresh | quote }}
   THEME_COLORS: {{ include "ccc.theme" . | quote }}

@@ -441,6 +441,13 @@
             },
             "description": "Roots from the trust store that complete a path but were not sent."
           },
+          "crossSigns": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Certificate"
+            },
+            "description": "Certificates the server did not send that appear only on `notSent` paths: cross-signs of included roots published in CCADB (`source: ccadb`), and the roots they lead to. Omitted when there are none."
+          },
           "paths": {
             "type": "array",
             "items": {
@@ -565,6 +572,10 @@
           "best": {
             "type": "boolean"
           },
+          "notSent": {
+            "type": "boolean",
+            "description": "The path goes through a cross-sign the server did not send (from CCADB). Shown for information only: it never counts toward a check or the best path, and it comes after all other paths. Clients that already have the cross-sign, or fetch missing certificates, may build it."
+          },
           "stores": {
             "type": "array",
             "items": {
@@ -608,9 +619,10 @@
             "type": "string",
             "enum": [
               "presented",
-              "mozilla_store"
+              "mozilla_store",
+              "ccadb"
             ],
-            "description": "`mozilla_store`: from the trust store, not sent."
+            "description": "`mozilla_store`: from the trust store, not sent. `ccadb`: a cross-sign of an included root, published in CCADB and not sent."
           },
           "sha256": {
             "type": "string",
@@ -897,6 +909,10 @@
               "microsoft": 204,
               "mozilla": 118
             }
+          },
+          "crossSigns": {
+            "type": "integer",
+            "description": "Cross-signs of included roots known from CCADB's intermediate report."
           },
           "refreshFailing": {
             "type": "boolean",
