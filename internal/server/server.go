@@ -162,7 +162,8 @@ func (s *Server) check(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusServiceUnavailable, "This server has no trust store data yet, so it cannot tell whether a chain is trusted. It retries the download from CCADB automatically. Try again in a few minutes.")
 		return
 	}
-	if ok, wait := s.Limiter.AllowN(client, 1); !ok {
+	ok, wait, refund := s.Limiter.AllowN(client, 1)
+	if !ok {
 		slog.Info("rate limited", "client", client)
 		s.limited(w, wait)
 		return
@@ -190,8 +191,12 @@ func (s *Server) check(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if extra := probe.Cost(len(ips)) - 1; extra > 0 {
-		if ok, wait := s.Limiter.AllowN(client, extra); !ok {
-			s.limited(w, wait)
+		if ok, _, _ := s.Limiter.AllowN(client, extra); !ok {
+			// Give back the first token and ask the client to wait until
+			// the whole cost is available, so a retry after Retry-After
+			// succeeds instead of spending that token again and failing.
+			refund()
+			s.limited(w, s.Limiter.Wait(client, extra+1))
 			return
 		}
 	}

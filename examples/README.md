@@ -22,3 +22,19 @@ Overall: fail
 Exit codes: `0` pass, `1` warn, `2` fail, `3` the request failed.
 
 The API help page (`/help`) shows the same scripts with that server's address filled in. `web/examples_test.go` fails if the two copies differ.
+
+## Batch
+
+`cacheck-batch.py` (Python 3.8 or later, standard library only) checks a list of hosts one at a time and writes CSV to stdout, one row per IP address and certificate. Each line of the list is `host`, `host:port` or `host:port starttls`; blank lines and `#` comments are skipped. Progress goes to stderr. Unlike the single-host scripts it has no default server: it stops at once if `CACHECK_URL` is not set.
+
+```
+$ CACHECK_URL=https://cacheck.example.edu ./cacheck-batch.py hosts.txt > results.csv
+[1/3] example.com
+[2/3] expired.badssl.com
+  HTTP 429, waiting 6s
+[3/3] smtp.gmail.com:587
+```
+
+Columns: `host, port, ip, key_type, tls_version, result, problems, consistency, checked_at, error`. A host that can't be checked at all (it doesn't resolve, for example) gets one row with `result` set to `error`.
+
+On `429` the script waits for the `Retry-After` seconds and tries the same host again, so it never goes over the server's rate limit. That also sets the speed: at the default 10 checks a minute, 100 hosts take at least 10 minutes, more if they have many IP addresses. The exit code is the worst result over all hosts, with the same exit codes. This script is not on the help page.

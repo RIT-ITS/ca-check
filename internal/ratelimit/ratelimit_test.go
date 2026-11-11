@@ -65,24 +65,53 @@ func TestLimiter(t *testing.T) {
 	l.now = func() time.Time { return now }
 	ip := netip.MustParseAddr("1.2.3.4")
 	for i := 0; i < 3; i++ {
-		if ok, _ := l.AllowN(ip, 1); !ok {
+		if ok, _, _ := l.AllowN(ip, 1); !ok {
 			t.Fatalf("request %d denied", i)
 		}
 	}
-	ok, wait := l.AllowN(ip, 1)
+	ok, wait, _ := l.AllowN(ip, 1)
 	if ok || wait <= 0 || wait > time.Second {
 		t.Fatalf("4th: ok=%v wait=%v", ok, wait)
 	}
-	if ok, _ := l.AllowN(netip.MustParseAddr("5.6.7.8"), 1); !ok {
+	if ok, _, _ := l.AllowN(netip.MustParseAddr("5.6.7.8"), 1); !ok {
 		t.Error("other IP should be independent")
 	}
 	now = now.Add(2 * time.Second)
-	if ok, _ := l.AllowN(ip, 2); !ok {
+	if ok, _, _ := l.AllowN(ip, 2); !ok {
 		t.Error("should refill")
 	}
 	now = now.Add(time.Hour)
 	l.Sweep()
 	if len(l.buckets) != 0 {
 		t.Errorf("sweep left %d buckets", len(l.buckets))
+	}
+}
+
+// A check charged in two steps must not spend its first token when the
+// second step is refused, and Wait must cover the whole cost.
+func TestLimiterRefundAndWait(t *testing.T) {
+	l := New(60, 2) // 1/s, burst 2
+	now := time.Unix(1_700_000_000, 0)
+	l.now = func() time.Time { return now }
+	ip := netip.MustParseAddr("1.2.3.4")
+	if ok, _, _ := l.AllowN(ip, 1); !ok {
+		t.Fatal("first denied")
+	}
+	// One token left: a cost-2 check takes it, then can't take the second.
+	ok, _, undo := l.AllowN(ip, 1)
+	if !ok {
+		t.Fatal("second denied")
+	}
+	if ok, _, _ := l.AllowN(ip, 1); ok {
+		t.Fatal("bucket should be empty")
+	}
+	undo()
+	if w := l.Wait(ip, 2); w <= 0 || w > time.Second {
+		t.Fatalf("wait for 2 tokens: %v", w)
+	}
+	// Wait must not consume: after waiting that long, both tokens are there.
+	now = now.Add(time.Second)
+	if ok, _, _ := l.AllowN(ip, 2); !ok {
+		t.Error("retry after Wait should succeed")
 	}
 }

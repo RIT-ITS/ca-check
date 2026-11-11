@@ -37,7 +37,7 @@ make run              # http://127.0.0.1:8080 (reads .env if present)
 
 `starttls` is optional (see above). `connectIPs` is optional and works like `curl --resolve`: the server connects to those IPs but still sends the hostname as SNI. The response has one entry in `results[]` per IP, each with its TLS info, chain analysis and Mermaid source.
 
-`GET /api/config` returns the UI flags. `GET /healthz` is the liveness check and `GET /readyz` the readiness check. The page at `/help` documents the API for users, with examples. `examples/` has bash, PowerShell and Python scripts that print a summary table; the help page shows the same scripts, and a test fails if they differ. `/swagger` is an interactive Swagger UI reference built from `web/openapi.json` (OpenAPI 3.0.3); a test fails if the spec and the Go types drift apart. Swagger UI is vendored in `web/vendor/swagger-ui` (`make refresh-swagger`), so no outside scripts are loaded.
+`GET /api/config` returns the UI flags. `GET /healthz` is the liveness check and `GET /readyz` the readiness check. The page at `/help` documents the API for users, with examples. `examples/` has bash, PowerShell and Python scripts that print a summary table; the help page shows the same scripts, and a test fails if they differ. `examples/cacheck-batch.py` checks a list of hosts and writes CSV, waiting out `Retry-After` on `429`; it is not on the help page. `/swagger` is an interactive Swagger UI reference built from `web/openapi.json` (OpenAPI 3.0.3); a test fails if the spec and the Go types drift apart. Swagger UI is vendored in `web/vendor/swagger-ui` (`make refresh-swagger`), so no outside scripts are loaded.
 
 ## Target access policy
 

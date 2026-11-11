@@ -41,34 +41,47 @@ func New(rpm float64, burst int) *Limiter {
 }
 
 // AllowN consumes n tokens for key; if not allowed it returns the suggested
-// wait before retrying. n is clamped to the burst size.
-func (l *Limiter) AllowN(key netip.Addr, n int) (bool, time.Duration) {
-	if n > l.burst {
-		n = l.burst
-	}
-	if n < 1 {
-		n = 1
-	}
+// wait before retrying. n is clamped to the burst size. When allowed, undo
+// returns the tokens, for a request that is refused later on.
+func (l *Limiter) AllowN(key netip.Addr, n int) (ok bool, wait time.Duration, undo func()) {
 	now := l.now()
+	r := l.bucket(key, now).ReserveN(now, l.clamp(n))
+	if !r.OK() {
+		return false, time.Minute, func() {}
+	}
+	if d := r.DelayFrom(now); d > 0 {
+		r.CancelAt(now)
+		return false, d, func() {}
+	}
+	return true, 0, func() { r.CancelAt(l.now()) }
+}
+
+// Wait returns how long until n tokens are available for key, without
+// consuming any.
+func (l *Limiter) Wait(key netip.Addr, n int) time.Duration {
+	now := l.now()
+	r := l.bucket(key, now).ReserveN(now, l.clamp(n))
+	if !r.OK() {
+		return time.Minute
+	}
+	defer r.CancelAt(now)
+	return r.DelayFrom(now)
+}
+
+func (l *Limiter) clamp(n int) int {
+	return min(max(n, 1), l.burst)
+}
+
+func (l *Limiter) bucket(key netip.Addr, now time.Time) *rate.Limiter {
 	l.mu.Lock()
+	defer l.mu.Unlock()
 	e, ok := l.buckets[key]
 	if !ok {
 		e = &entry{lim: rate.NewLimiter(l.rate, l.burst)}
 		l.buckets[key] = e
 	}
 	e.seen = now
-	l.mu.Unlock()
-
-	r := e.lim.ReserveN(now, n)
-	if !r.OK() {
-		return false, time.Minute
-	}
-	d := r.DelayFrom(now)
-	if d == 0 {
-		return true, 0
-	}
-	r.CancelAt(now)
-	return false, d
+	return e.lim
 }
 
 // Sweep removes buckets idle longer than the idle window.
