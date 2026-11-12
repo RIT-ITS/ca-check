@@ -761,7 +761,10 @@
           uniqueSvgIds(slot.firstElementChild, svgId);
           slot.firstElementChild?.setAttribute("aria-label", "Certificate issuance paths diagram");
           slot.firstElementChild?.setAttribute("role", "img");
-          if (slot.firstElementChild) hatchDiagram(slot.firstElementChild, a.diagramKey);
+          if (slot.firstElementChild) {
+            hatchDiagram(slot.firstElementChild, a.diagramKey);
+            colourArrowheads(slot.firstElementChild);
+          }
         } catch (e) {
           slot.replaceChildren(h("p", {}, `Diagram unavailable: ${e.message || e}. The table below lists every path.`));
         }
@@ -851,6 +854,30 @@
       for (const g of svg.querySelectorAll(`g.node.${CSS.escape(e.class)}`)) {
         for (const shape of g.querySelectorAll(":scope > rect, :scope > path, :scope > polygon")) shape.style.setProperty("fill", `url(#${id})`, "important");
       }
+    }
+  }
+  // Mermaid's linkStyle colours an arrow's line but not its head, which all
+  // arrows share. Give each line colour its own copy of the head.
+  function colourArrowheads(svg) {
+    const copies = new Map();
+    for (const link of svg.querySelectorAll("path.flowchart-link[marker-end]")) {
+      const colour = link.style.stroke;
+      const m = /^url\(#(.+)\)$/.exec(link.getAttribute("marker-end") || "");
+      if (!colour || !m) continue;
+      const key = `${m[1]} ${colour}`;
+      if (!copies.has(key)) {
+        const marker = svg.querySelector(`marker#${CSS.escape(m[1])}`);
+        if (!marker) continue;
+        const copy = marker.cloneNode(true);
+        copy.id = `${m[1]}-c${copies.size}`;
+        for (const head of copy.querySelectorAll(".arrowMarkerPath")) {
+          head.style.setProperty("fill", colour, "important");
+          head.style.setProperty("stroke", colour, "important");
+        }
+        marker.after(copy);
+        copies.set(key, copy.id);
+      }
+      link.setAttribute("marker-end", `url(#${copies.get(key)})`);
     }
   }
   function keySwatch(e) {
