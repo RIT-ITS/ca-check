@@ -240,7 +240,7 @@ func TestPendingDistrust(t *testing.T) {
 	if !r.Paths[0].Pending || r.StoreRoots[0].PendingDistrust == nil {
 		t.Error("pending not propagated")
 	}
-	if !strings.Contains(r.Mermaid, "pending distrust") {
+	if !strings.Contains(r.Mermaid, "<b>pending distrust</b>") {
 		t.Error("mermaid should label pending distrust")
 	}
 }

@@ -951,7 +951,7 @@ func (a *analyzer) mermaid(res *Result) (string, []KeyEntry) {
 			extra = "<br/>untrusted root"
 		}
 		if ci.PendingDistrust != nil {
-			extra += "<br/>pending distrust"
+			extra += "<br/><b>pending distrust</b>"
 		}
 		if ci.Status == StatusExpired || ci.Status == StatusNotYetValid {
 			extra += "<br/>" + strings.ReplaceAll(ci.Status, "_", " ")
@@ -993,7 +993,7 @@ func (a *analyzer) mermaid(res *Result) (string, []KeyEntry) {
 				extra = "<br/>not on a trusted path"
 			}
 		}
-		fmt.Fprintf(&b, "  %s[\"%s<br/><small>%s · %s…</small>%s\"]\n",
+		fmt.Fprintf(&b, "  %s[\"<b>%s</b><br/><small>%s · %s…</small>%s\"]\n",
 			ci.ID, mermaidEscape(ci.SubjectCN), where, ci.SHA256[:12], extra)
 		used[key] = true
 		fmt.Fprintf(&b, "  class %s %s\n", ci.ID, classOf[key])
