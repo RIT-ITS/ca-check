@@ -245,6 +245,54 @@ func TestPendingDistrust(t *testing.T) {
 	}
 }
 
+// Arrows on a path through a pending-distrust CA are amber and dotted, not
+// the trusted style.
+func TestPendingDistrustLinks(t *testing.T) {
+	p := newPKI()
+	o := opts(p.store)
+	o.Pending = map[string]config.PendingDistrust{
+		truststore.FingerprintSHA256(p.inter.Cert): {Date: "2027-01-01"},
+	}
+	r := Analyze(testpki.X509(p.leaf, p.inter), o)
+	wantKey(t, r, "trusted", "store", "pending", "pending-link")
+	if !strings.Contains(r.Mermaid, "linkStyle 0 stroke:#8a5a00,stroke-width:2px,stroke-dasharray:2 3") {
+		t.Errorf("pending link not styled:\n%s", r.Mermaid)
+	}
+}
+
+// Arrows on a path to a root no store includes are red and dash-dotted.
+func TestUntrustedRootLinks(t *testing.T) {
+	p := newPKI()
+	empty := storeWith(nil, nil)
+	r := Analyze(testpki.X509(p.leaf, p.inter, p.root), opts(empty))
+	if len(r.Paths) != 1 || r.Paths[0].Terminal != TermUntrustedRoot {
+		t.Fatalf("paths: %+v", r.Paths)
+	}
+	wantKey(t, r, "other", "untrusted-link")
+	if !strings.Contains(r.Mermaid, "stroke:#b3261e,stroke-width:2px,stroke-dasharray:8 3 2 3") {
+		t.Errorf("untrusted link not styled:\n%s", r.Mermaid)
+	}
+}
+
+// A root that stores trust only for older certificates counts as untrusted
+// for the arrows.
+func TestLimitedRootLinks(t *testing.T) {
+	p := newPKI()
+	s := storeWith([]*testpki.Cert{p.root}, map[string]string{truststore.Microsoft: truststore.Limited})
+	r := Analyze(testpki.X509(p.leaf, p.inter), opts(s))
+	if len(r.Paths) != 1 || len(r.Paths[0].Stores) != 0 || len(r.Paths[0].LimitedStores) != 1 {
+		t.Fatalf("paths: %+v", r.Paths)
+	}
+	for _, k := range r.DiagramKey {
+		if k.ID == "trusted-link" {
+			t.Errorf("limited-only path drawn as trusted:\n%s", r.Mermaid)
+		}
+	}
+	if !strings.Contains(r.Mermaid, "stroke:#b3261e") {
+		t.Errorf("limited-only path not drawn as untrusted:\n%s", r.Mermaid)
+	}
+}
+
 func TestHostnameMismatch(t *testing.T) {
 	p := newPKI()
 	o := opts(p.store)

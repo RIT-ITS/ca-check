@@ -895,7 +895,9 @@ var diagramStyles = []struct {
 	// Every state differs by more than colour, for colour-blind readers:
 	// trusted nodes have a thick border (dashed when not sent), warnings a
 	// dotted border, problems are hatched, and each node also says its state
-	// in words. Trusted links are thick; links to a missing issuer dashed.
+	// in words. Trusted links are thick and solid; links on a path through a
+	// pending-distrust CA dotted; links on a path to a root no store fully
+	// trusts dash-dotted; links to a missing issuer or a cross-sign dashed.
 	{KeyEntry{ID: "trusted", Kind: "node", Fill: "#e9f3ec", Stroke: "#2c6a3d", Text: "#16202b", Width: 3}, "trusted"},
 	{KeyEntry{ID: "store", Kind: "node", Fill: "#e9f3ec", Stroke: "#2c6a3d", Text: "#16202b", Width: 3, Dash: "6 4"}, "store"},
 	{KeyEntry{ID: "other", Kind: "node", Fill: "#f3f5f7", Stroke: "#7d8a99", Text: "#16202b", Width: 1.5}, "cert"},
@@ -908,8 +910,20 @@ var diagramStyles = []struct {
 	{KeyEntry{ID: "missing", Kind: "node", Fill: "transparent", Stroke: "#b3261e", Text: "#b3261e", Width: 1.5, Dash: "6 4"}, "missing"},
 	{KeyEntry{ID: "link", Kind: "link", Stroke: "#7d8a99", Width: 1.5}, ""},
 	{KeyEntry{ID: "trusted-link", Kind: "link", Stroke: "#2c6a3d", Width: 3}, ""},
+	{KeyEntry{ID: "pending-link", Kind: "link", Stroke: "#8a5a00", Width: 2, Dash: "2 3"}, ""},
+	{KeyEntry{ID: "untrusted-link", Kind: "link", Stroke: "#b3261e", Width: 2, Dash: "8 3 2 3"}, ""},
 	{KeyEntry{ID: "missing-link", Kind: "link", Stroke: "#7d8a99", Width: 1.5, Dash: "3 3"}, ""},
 	{KeyEntry{ID: "crosssign-link", Kind: "link", Stroke: "#7d8a99", Width: 1.5, Dash: "3 3"}, ""},
+}
+
+// DiagramStyleIDs lists every diagram key ID, so the UI's key text can be
+// checked against it.
+func DiagramStyleIDs() []string {
+	ids := make([]string, len(diagramStyles))
+	for i, st := range diagramStyles {
+		ids[i] = st.ID
+	}
+	return ids
 }
 
 func (a *analyzer) mermaid(res *Result) (string, []KeyEntry) {
@@ -1002,7 +1016,14 @@ func (a *analyzer) mermaid(res *Result) (string, []KeyEntry) {
 	type edge struct{ from, to string }
 	edges := map[edge]int{}
 	var order []edge
-	trustedEdge := map[edge]bool{}
+	// The style of each edge on a path: the best path it is on wins.
+	const (
+		edgePlain = iota
+		edgeUntrusted
+		edgePending
+		edgeTrusted
+	)
+	edgeKind := map[edge]int{}
 	missing := 0
 	for _, p := range append(append([]Path{}, a.paths...), a.notSent...) {
 		for i := 0; i+1 < len(p.Nodes); i++ {
@@ -1011,9 +1032,18 @@ func (a *analyzer) mermaid(res *Result) (string, []KeyEntry) {
 				edges[e] = len(order)
 				order = append(order, e)
 			}
-			if p.Trusted {
-				trustedEdge[e] = true
+			k := edgePlain
+			switch {
+			case p.Trusted && len(p.Stores) > 0 && !p.Pending:
+				k = edgeTrusted
+			case p.Trusted && len(p.Stores) > 0:
+				k = edgePending
+			case p.Terminal == TermUntrustedRoot || p.Trusted:
+				// An untrusted root, or one stores trust only for older
+				// certificates.
+				k = edgeUntrusted
 			}
+			edgeKind[e] = max(edgeKind[e], k)
 		}
 		if p.Terminal == TermIncomplete {
 			id := fmt.Sprintf("m%d", missing)
@@ -1051,30 +1081,43 @@ func (a *analyzer) mermaid(res *Result) (string, []KeyEntry) {
 			}
 		}
 	}
-	for _, e := range order {
+	styleOf := make([]string, len(order)) // link style ID per edge, by index
+	for i, e := range order {
 		arrow := "-->"
 		switch {
 		case strings.HasPrefix(e.to, "m"):
 			arrow = "-.->"
-			used["missing-link"] = true
+			styleOf[i] = "missing-link"
 		case notSentOnly[e.to] || notSentOnly[e.from]:
 			arrow = "-.->"
-			used["crosssign-link"] = true
-		case trustedEdge[e]:
-			used["trusted-link"] = true
+			styleOf[i] = "crosssign-link"
+		case edgeKind[e] == edgeTrusted:
+			styleOf[i] = "trusted-link"
+		case edgeKind[e] == edgePending:
+			styleOf[i] = "pending-link"
+		case edgeKind[e] == edgeUntrusted:
+			styleOf[i] = "untrusted-link"
 		default:
-			used["link"] = true
+			styleOf[i] = "link"
 		}
+		used[styleOf[i]] = true
 		fmt.Fprintf(&b, "  %s %s|issued| %s\n", e.to, arrow, e.from)
 	}
 	var key []KeyEntry
 	classDone := map[string]bool{}
 	for _, st := range diagramStyles {
-		if st.ID == "trusted-link" {
-			for i, e := range order {
-				if trustedEdge[e] {
-					fmt.Fprintf(&b, "  linkStyle %d stroke:%s,stroke-width:%gpx\n", i, st.Stroke, st.Width)
+		// Plain links use the theme's line colour, and missing and
+		// cross-sign links Mermaid's dotted arrow; the rest are styled here.
+		if st.Kind == "link" && st.ID != "link" && st.ID != "missing-link" && st.ID != "crosssign-link" {
+			for i, id := range styleOf {
+				if id != st.ID {
+					continue
 				}
+				fmt.Fprintf(&b, "  linkStyle %d stroke:%s,stroke-width:%gpx", i, st.Stroke, st.Width)
+				if st.Dash != "" {
+					b.WriteString(",stroke-dasharray:" + st.Dash)
+				}
+				b.WriteString("\n")
 			}
 		}
 		if st.class != "" && !classDone[st.class] {

@@ -809,10 +809,14 @@
     invalid: ["Expired or not yet valid", "Outside its validity dates, so clients reject it."],
     revoked: ["Revoked", "Its issuer says it is revoked (OCSP or CRL). Clients that check will reject it."],
     unrelated: ["Unrelated", "Not on any path from this site's certificate. Remove it."],
-    missing: ["Missing issuer", "Not sent by the server and not in the trust store, so the path stops here. Its arrow is dashed."],
-    crosssign: ["Cross-sign, not sent", "Published in CCADB but not sent by the server, or a root reached only through one. Its arrows are dashed. Shown for information."],
+    missing: ["Missing issuer", "Not sent by the server and not in the trust store, so the path stops here."],
+    crosssign: ["Cross-sign, not sent", "Published in CCADB but not sent by the server, or a root reached only through one. Shown for information."],
     link: ["Issued", "Points from the issuer down to the certificate it signed."],
     "trusted-link": ["Trusted link", "On a path to a trusted root."],
+    "pending-link": ["Path through pending distrust", "Trusted now, but passes through a CA scheduled to lose trust."],
+    "untrusted-link": ["Untrusted path", "Leads to a root no trust store fully trusts: untrusted, or trusted only for older certificates."],
+    "missing-link": ["Issuer missing", "The server didn't send the issuer and it isn't in the trust store."],
+    "crosssign-link": ["Issued, cross-sign not sent", "Uses a cross-sign the server doesn't send. Shown for information."],
   };
   function diagramKey(entries) {
     const items = (entries || []).filter((e) => KEY_TEXT[e.id]).map((e) => {
