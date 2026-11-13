@@ -128,9 +128,15 @@ For TLS on the Traefik `IngressRoute`, set `traefik.ingressRoute.tls.certResolve
 
 Site-specific values (image registry, hosts, pull secrets) can go in `deploy/helm/values.local.yaml`, which git ignores. Pass it with `-f deploy/helm/values.local.yaml`.
 
-## CI (GitLab)
+## CI
+
+### GitLab
 
 `.gitlab-ci.yml` runs `go vet` and `go test` on every push and merge request. On the default branch it builds the image with rootless Buildah and pushes it to the project's container registry twice, as `:latest` and as `:<short commit SHA>`. To deploy `:latest`, set `image.pullPolicy=Always` and run `kubectl rollout restart deployment/ca-chain-check` after each push. To pin a release, set `image.tag` to the SHA instead.
+
+### GitHub
+
+`.github/workflows/ci.yml` does the same on GitHub: `go vet` and `go test` on every push and pull request, then, on the default branch, it builds the image and pushes it to `ghcr.io/<owner>/<repo>` as `:latest` and `:<short commit SHA>`. It logs in with the workflow's own `GITHUB_TOKEN`, so no secrets need setting up. New packages on ghcr.io are private; to pull without logging in, make the package public in its settings on GitHub.
 
 ## Maintenance
 
